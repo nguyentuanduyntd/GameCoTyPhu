@@ -113,7 +113,7 @@ Luật vẫn do engine quyết định; phần trình diễn chạy theo máy tr
 - Nút **Góc nhìn: Điện ảnh / Toàn cảnh** trong ván để tắt camera POV bất cứ lúc nào. Cài đặt "Camera điện ảnh khi đi": Tắt / Chỉ lượt của bạn / Mọi người chơi (mặc định). Lượt của máy trình diễn nhanh hơn ×1,7.
 
 ### 3.2. Đất & xây dựng
-- Dừng ở tỉnh chưa ai mua → mua hoặc bỏ qua. **Bỏ qua thì ô được đem ra đấu giá** cho những người còn lại (xem 3.2b).
+- Dừng ở tỉnh chưa ai mua → mua đất hoặc bỏ qua. Mua xong (hoặc thắng đấu giá) thì **chọn loại công trình** (xem 3.2a). **Bỏ qua thì ô được đem ra đấu giá** cho những người còn lại (xem 3.2b).
 - **Xây / nâng cấp khi dừng lại đúng ô của mình** (popup "Nâng cấp … lên Cấp X — giá …", có thể nhảy nhiều cấp nếu đủ tiền, trừ Danh Thắng).
 - **3 cấp công trình** (hệ số trong `data/economy.tres`):
 
@@ -127,6 +127,22 @@ Luật vẫn do engine quyết định; phần trình diễn chạy theo máy tr
   Danh Thắng cần sở hữu ≥ 2 tỉnh trong vùng và không thể bị thâu tóm.
 - **Hình ảnh**: có chủ là cắm **cờ màu người chơi** (phấp phới) ở góc ô; công trình **mọc lên** có nảy vượt, bụi bay, rung camera nhẹ và tiếng búa khi chạm đất; nâng cấp thì công trình cũ thu lại rồi công trình mới mọc lên (nhẹ hơn mua mới); bị hạ cấp (bão, Giải Tỏa, bán bớt) thì đổi về mô hình nhỏ hơn. Ô hạ tầng có mô hình cố định khi có chủ: xe khách + biển trạm, nhà ga + đường ray, cần cẩu + container, tháp điều khiển + máy bay, chòi thu phí BOT.
 - **Sở hữu trọn nhóm vùng**: tiền thuê ×2 cho cả nhóm.
+
+### 3.2a. Loại công trình
+
+Sau khi sở hữu ô tỉnh (mua thường hoặc thắng đấu giá) chủ chọn 1 trong 4 loại (panel 4 thẻ, thẻ không đủ tiền mờ đi kèm lý do; **"Để sau"** giữ đất trống, quay lại ô này sẽ được chọn tiếp). Cấp 2 nâng tiếp cùng loại; cấp 3 là Danh Thắng của tỉnh (giữ hiệu ứng của loại). Số liệu trong `data/buildings/*.tres`:
+
+| Loại | Giá xây cấp 1 / 2 / 3 | Thuê cấp 1 / 2 / 3 | Hiệu ứng riêng |
+|---|---|---|---|
+| **Nhà hàng** | 0,6 / 0,8 / 1,2 × giá đất | 1,0 / 2,2 / 4,5 | Thuê cao nhất; mùa Tết +20% |
+| **Homestay** | 0,5 / 0,7 / 1,0 | 0,75 / 1,6 / 3,2 | Chủ qua Km 0 nhận 10% / 18% / 28% giá đất |
+| **Chợ** | 0,4 / 0,6 / 0,9 | 0,6 / 1,3 / 2,6 | Người khác đi qua hoặc dừng nộp phí chợ 5% / 9% / 13% giá đất: 60% cho chủ, 40% vào Quỹ; mùa Tết +20% |
+| **Xưởng đặc sản** | 0,45 / 0,65 / 0,95 | 0,5 / 1,1 / 2,2 | Đầu mỗi vòng chủ nhận 1 / 1 / 2 đặc sản của tỉnh |
+
+- Ô chưa xây (đất trống) thu 0,2 × giá đất. Các hệ số vùng, Lễ Hội, mùa, kỹ năng nhân vật vẫn nhân thêm như cũ.
+- Popup/banner trả thuê ghi rõ loại và cấp (vd. "Nhà hàng · Cấp 2 · Hà Nội"); bảng người chơi hiện "Đất · Nhà · Đặc sản".
+- **Máy chọn loại** theo tính cách (`build_pref` trong `data/economy.tres`: Doanh Nhân thích Nhà hàng, Tiểu Thương thích Chợ, Nông Dân thích Xưởng, Ngư Dân thích Homestay…) và tình huống: còn nhiều vòng thì Homestay có lợi, ô ở đoạn đông người (sau Km 0, sau Kẹt Xe) thì Chợ / Nhà hàng có lợi.
+- Mô phỏng 600 ván: tỉ lệ xây Nhà hàng 42%, Homestay 29%, Chợ 17%, Xưởng 12%; loại chủ đạo của người thắng gần đúng tỉ lệ đó (không loại nào lấn át); tỉ lệ thắng các nhân vật 17–24%; ~1 người phá sản mỗi ván.
 
 ### 3.2b. Đấu giá
 

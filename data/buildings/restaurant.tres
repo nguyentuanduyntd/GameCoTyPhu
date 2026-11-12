@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="BuildingType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "restaurant"
+name = "Nhà hàng"
+desc = "Thu tiền thuê cao nhất khi người khác dừng lại. Giá xây cao. Mùa Tết đông khách: thuê +20%."
+color = Color(0.8980, 0.2235, 0.2078, 1)
+build_mult = Array[float]([0.6, 0.8, 1.2])
+rent_mult = Array[float]([1.0, 2.2, 4.5])
+lap_income = Array[float]([0.0, 0.0, 0.0])
+pass_fee = Array[float]([0.0, 0.0, 0.0])
+fee_owner_share = 0.6
+specialties_per_round = Array[int]([0, 0, 0])
+tet_rent_bonus = 0.2

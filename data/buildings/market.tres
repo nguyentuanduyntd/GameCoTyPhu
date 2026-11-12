@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="BuildingType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "market"
+name = "Chợ"
+desc = "Thuê thấp, nhưng ai đi qua hoặc dừng ở đây cũng nộp phí vào chợ: 60% cho bạn, 40% vào Quỹ. Mùa Tết thuê +20%."
+color = Color(0.9843, 0.5490, 0.0000, 1)
+build_mult = Array[float]([0.4, 0.6, 0.9])
+rent_mult = Array[float]([0.6, 1.3, 2.6])
+lap_income = Array[float]([0.0, 0.0, 0.0])
+pass_fee = Array[float]([0.05, 0.09, 0.13])
+fee_owner_share = 0.6
+specialties_per_round = Array[int]([0, 0, 0])
+tet_rent_bonus = 0.2

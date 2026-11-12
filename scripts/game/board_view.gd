@@ -365,9 +365,11 @@ func _tree(p: Vector3, s: float) -> Node3D:
 
 ## Cập nhật hình ảnh ô: cờ chủ sở hữu + công trình theo loại và cấp.
 ## animate = false khi dựng lại trạng thái (tải ván, trưng bày) — không có hoạt ảnh.
-func set_tile_state(t: int, owner_id: int, lvl: int, animate: bool = true) -> void:
+func set_tile_state(t: int, owner_id: int, lvl: int, animate: bool = true, kind_override: String = "") -> void:
 	var province := BoardData.is_province(t)
-	var kind := String(kind_of.call(t)) if province else ""
+	var kind := ""
+	if province:
+		kind = kind_override if kind_override != "" else String(kind_of.call(t))
 	var prev_owner: int = _shown_owner[t]
 	var prev_level: int = _shown_level[t]
 	var prev_kind: String = _shown_kind[t]
@@ -424,7 +426,7 @@ func set_tile_state(t: int, owner_id: int, lvl: int, animate: bool = true) -> vo
 ## Dựng lại toàn bộ bàn cờ từ trạng thái engine (dùng khi tải ván / khôi phục), không hoạt ảnh.
 func rebuild_from(engine: GameEngine) -> void:
 	for t in BoardData.TILE_COUNT:
-		set_tile_state(t, engine.owner[t], engine.level[t], false)
+		set_tile_state(t, engine.owner[t], engine.level[t], false, String(engine.btype[t]))
 	set_festival(engine.festival_tile)
 
 

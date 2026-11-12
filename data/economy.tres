@@ -1,12 +1,17 @@
-[gd_resource type="Resource" script_class="EconomyConfig" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="EconomyConfig" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/data/economy_config.gd" id="1"]
+[ext_resource type="Resource" path="res://data/buildings/restaurant.tres" id="2"]
+[ext_resource type="Resource" path="res://data/buildings/homestay.tres" id="3"]
+[ext_resource type="Resource" path="res://data/buildings/market.tres" id="4"]
+[ext_resource type="Resource" path="res://data/buildings/workshop.tres" id="5"]
 
 [resource]
 script = ExtResource("1")
 rent_mult = Array[float]([0.2, 1.0, 2.2, 4.5])
 build_mult = Array[float]([0.0, 0.6, 0.9, 1.4])
 landmark_group_min = 2
+building_types = [ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5")]
 auction_start_ratio = 0.5
 auction_step_ratio = 0.1
 auction_round_to = 5
@@ -23,6 +28,7 @@ ai_complete_group_mult = 1.5
 ai_block_mult = 1.2
 personalities = {
 "doanh_nhan": {
+"build_pref": {"restaurant": 1.3, "homestay": 1.0, "market": 0.9, "workshop": 0.85},
 "bid_mult": 1.15,
 "group_bonus": 0.3,
 "infra_bonus": 0.1,
@@ -31,6 +37,7 @@ personalities = {
 "reserve": 0.9
 },
 "hoc_sinh": {
+"build_pref": {"restaurant": 0.9, "homestay": 1.1, "market": 1.0, "workshop": 1.2},
 "bid_mult": 0.9,
 "group_bonus": 0.2,
 "infra_bonus": 0.0,
@@ -40,6 +47,7 @@ personalities = {
 "reserve": 1.0
 },
 "ngu_dan": {
+"build_pref": {"restaurant": 0.9, "homestay": 1.3, "market": 1.0, "workshop": 1.0},
 "bid_mult": 0.8,
 "group_bonus": 0.2,
 "infra_bonus": 0.0,
@@ -48,6 +56,7 @@ personalities = {
 "reserve": 1.5
 },
 "nghe_si": {
+"build_pref": {"restaurant": 1.15, "homestay": 1.1, "market": 0.95, "workshop": 0.9},
 "bid_mult": 1.05,
 "group_bonus": 0.25,
 "infra_bonus": 0.0,
@@ -56,6 +65,7 @@ personalities = {
 "reserve": 0.9
 },
 "nong_dan": {
+"build_pref": {"restaurant": 0.9, "homestay": 1.0, "market": 1.0, "workshop": 1.4},
 "bid_mult": 1.0,
 "group_bonus": 0.6,
 "infra_bonus": 0.0,
@@ -64,6 +74,7 @@ personalities = {
 "reserve": 1.1
 },
 "tho_ho": {
+"build_pref": {"restaurant": 1.2, "homestay": 0.9, "market": 1.1, "workshop": 0.9},
 "bid_mult": 1.25,
 "group_bonus": 0.2,
 "infra_bonus": 0.0,
@@ -72,6 +83,7 @@ personalities = {
 "reserve": 0.7
 },
 "tieu_thuong": {
+"build_pref": {"restaurant": 0.95, "homestay": 0.95, "market": 1.35, "workshop": 1.0},
 "bid_mult": 0.95,
 "group_bonus": 0.25,
 "infra_bonus": 0.0,
@@ -80,6 +92,7 @@ personalities = {
 "reserve": 1.1
 },
 "xe_om": {
+"build_pref": {"restaurant": 1.0, "homestay": 1.0, "market": 1.2, "workshop": 0.95},
 "bid_mult": 1.0,
 "group_bonus": 0.25,
 "infra_bonus": 0.3,

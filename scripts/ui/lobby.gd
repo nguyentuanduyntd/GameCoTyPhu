@@ -23,7 +23,7 @@ var _cam: Camera3D
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	var jump := args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo")
+	var jump := args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo") or args.has("--pickerdemo")
 	for a in args:
 		if a.begins_with("--carddemo="):
 			jump = true

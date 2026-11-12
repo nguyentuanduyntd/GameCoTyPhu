@@ -24,6 +24,10 @@ func _init() -> void:
 	var auction_ratio := 0.0
 	var auction_wins := {}
 	var auction_bids := {}
+	var built := {}
+	var rent_by := {}
+	var passive_by := {}
+	var winner_types := {}
 	var t0 := Time.get_ticks_msec()
 	for g in games:
 		var e := GameEngine.new()
@@ -50,6 +54,13 @@ func _init() -> void:
 						auction_ratio += float(x["price"]) / float(BoardData.tile(x["tile"])["price"])
 						var wc: String = e.players[x["winner"]]["character"]
 						auction_wins[wc] = auction_wins.get(wc, 0) + 1
+				elif x["t"] == "building":
+					built[x["type"]] = built.get(x["type"], 0) + 1
+				elif x["t"] == "rent":
+					var k: String = e.btype[x["tile"]] if e.btype[x["tile"]] != "" else ("đất trống" if BoardData.is_province(x["tile"]) else "hạ tầng")
+					rent_by[k] = rent_by.get(k, 0) + int(x["amount"])
+				elif x["t"] == "passive":
+					passive_by[x["kind"]] = passive_by.get(x["kind"], 0) + int(x["amount"])
 				elif x["t"] == "auction_bid":
 					var bc: String = e.players[x["p"]]["character"]
 					auction_bids[bc] = auction_bids.get(bc, 0) + 1
@@ -71,6 +82,17 @@ func _init() -> void:
 		total_rounds += mini(e.round_num, e.max_rounds)
 		bankrupt_total += e.eliminated.size()
 		pot_total += e.charity_pot
+		var wcount := {}
+		for t in BoardData.TILE_COUNT:
+			if e.owner[t] == e.winner and e.btype[t] != "":
+				wcount[e.btype[t]] = wcount.get(e.btype[t], 0) + 1
+		var top := "-"
+		var topn := 0
+		for k in wcount.keys():
+			if wcount[k] > topn:
+				topn = wcount[k]
+				top = k
+		winner_types[top] = winner_types.get(top, 0) + 1
 		var wch: String = e.players[e.winner]["character"]
 		char_wins[wch] = char_wins.get(wch, 0) + 1
 		diff_wins[e.players[e.winner]["difficulty"]] += 1
@@ -82,6 +104,10 @@ func _init() -> void:
 	print("Đấu giá: %d cuộc (%.1f/ván), bán được %.0f%%, giá chốt TB %.0f%% giá niêm yết" % [auctions, float(auctions) / games, 100.0 * auctions_sold / maxi(1, auctions), 100.0 * auction_ratio / maxi(1, auctions_sold)])
 	for ch in chars:
 		print("  %-12s thắng đấu giá %3d, số lần trả giá %4d" % [ch, auction_wins.get(ch, 0), auction_bids.get(ch, 0)])
+	print("Công trình đã xây: %s" % built)
+	print("Tiền thuê thu theo loại (TB/ván): %s" % _per_game(rent_by, games))
+	print("Thu nhập thụ động (TB/ván): %s  (workshop = số đặc sản)" % _per_game(passive_by, games))
+	print("Loại công trình chủ đạo của người thắng: %s" % winner_types)
 	print("Thắng theo độ khó (Dễ/Thường/Khó): %s" % [diff_wins])
 	for ch in chars:
 		print("  %-12s thắng %3d / %3d lượt tham gia (%.1f%%)" % [ch, char_wins.get(ch, 0), char_games.get(ch, 0), 100.0 * char_wins.get(ch, 0) / maxi(1, char_games.get(ch, 0))])
@@ -97,3 +123,11 @@ func _check_invariants(e: GameEngine, g: int) -> void:
 			printerr("Ván %d: ô %d thuộc người đã phá sản" % [g, t])
 		if e.level[t] < 0 or e.level[t] > 4:
 			printerr("Ván %d: cấp nhà sai ô %d" % [g, t])
+
+
+func _per_game(d: Dictionary, games: int) -> Dictionary:
+	var r := {}
+	for k in d.keys():
+		r[k] = int(round(float(d[k]) / games))
+	return r
+

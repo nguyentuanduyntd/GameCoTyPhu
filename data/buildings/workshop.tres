@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="BuildingType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/building_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "workshop"
+name = "Xưởng đặc sản"
+desc = "Thuê thấp, nhưng đầu mỗi vòng bạn nhận đặc sản của tỉnh (cấp 3: 2 món) — gom bộ đổi Thẻ Kỹ Năng hoặc bán ở Chợ Phiên."
+color = Color(0.2627, 0.6275, 0.2784, 1)
+build_mult = Array[float]([0.45, 0.65, 0.95])
+rent_mult = Array[float]([0.5, 1.1, 2.2])
+lap_income = Array[float]([0.0, 0.0, 0.0])
+pass_fee = Array[float]([0.0, 0.0, 0.0])
+fee_owner_share = 0.6
+specialties_per_round = Array[int]([1, 1, 2])
+tet_rent_bonus = 0.0

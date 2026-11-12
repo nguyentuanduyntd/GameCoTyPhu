@@ -22,7 +22,8 @@ Màn đầu tiên là **sảnh 3D**: các nhân vật đứng thành hàng ngang
 ```
 scripts/core/     Luật chơi thuần logic (GameEngine) + bot (BotAI) — dùng lại cho server online
 scripts/data/     Dữ liệu bàn cờ, thẻ, nhân vật; EconomyConfig (Resource hằng số cân bằng)
-data/economy.tres Hằng số đấu giá + tính cách AI — mở trong Godot Inspector để chỉnh
+data/economy.tres Hằng số đấu giá, cấp nhà, tính cách AI — mở trong Godot Inspector để chỉnh
+data/buildings/   4 loại công trình (Nhà hàng, Homestay, Chợ, Xưởng đặc sản) — giá xây, thuê, hiệu ứng
 scripts/game/     Bàn cờ 3D, bản đồ Việt Nam, nhân vật, danh thắng, xúc xắc, hiệu ứng mùa, camera
                   (game.gd nối engine với hình ảnh)
 scripts/ui/       Sảnh 3D, HUD trong ván, bảng cài đặt
@@ -71,6 +72,12 @@ Xem panel đấu giá (Hà Nội được đem ra đấu giá ngay đầu ván, 
 
 ```bash
 godot --path . -- --auctiondemo --speed=1 --shots=8 --every=0.7 --shot=screenshots
+```
+
+Xem panel chọn loại công trình (bạn vừa sở hữu Hà Nội):
+
+```bash
+godot --path . -- --pickerdemo --speed=1 --shots=1 --every=2 --shot=screenshots
 ```
 
 Trưng bày công trình (mỗi tỉnh một loại × cấp, hạ tầng có chủ) và xem hoạt ảnh xây từng cấp:

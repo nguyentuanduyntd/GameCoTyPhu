@@ -38,6 +38,7 @@ var roll_btn: RollButton
 var roll_extras: HFlowContainer
 var banner: PanelContainer
 var auction_panel: AuctionPanel
+var building_picker: BuildingPicker
 var banner_label: Label
 var _banner_tw: Tween
 var info_label: RichTextLabel
@@ -56,6 +57,9 @@ func setup(p_engine: GameEngine, p_colors: Array, p_human: int) -> void:
 	auction_panel = AuctionPanel.new()
 	root.add_child(auction_panel)
 	auction_panel.setup(engine, colors, human_id)
+	building_picker = BuildingPicker.new()
+	root.add_child(building_picker)
+	building_picker.setup(engine)
 
 
 func _build() -> void:
@@ -252,9 +256,13 @@ func refresh_players() -> void:
 			parts.append("ĐÃ PHÁ SẢN")
 			box["panel"].modulate = Color(1, 1, 1, 0.45)
 		else:
-			parts.append("Đất: %d" % engine.owned_tiles(p["id"]).size())
+			var owned := engine.owned_tiles(p["id"])
+			var nb := 0
+			for t in owned:
+				if engine.level[t] > 0:
+					nb += 1
 			var sc := engine.specialty_counts(p["id"])
-			parts.append("Đặc sản B/T/N: %d/%d/%d" % [sc[0], sc[1], sc[2]])
+			parts.append("Đất %d · Nhà %d · Đ.sản %d/%d/%d" % [owned.size(), nb, sc[0], sc[1], sc[2]])
 			if p["cards"].size() > 0:
 				var names: Array = []
 				for c in p["cards"]:
@@ -352,7 +360,7 @@ func pick_tile(t: int) -> void:
 
 func show_decision(pend: Dictionary) -> void:
 	clear_decision()
-	if ["draw_card", "card_reveal", "card_pick", "auction_bid"].has(String(pend["type"])):
+	if ["draw_card", "card_reveal", "card_pick", "auction_bid", "choose_building"].has(String(pend["type"])):
 		return
 	waiting_label.text = ""
 	var p: Dictionary = engine.players[pend["p"]]
@@ -388,12 +396,16 @@ func show_decision(pend: Dictionary) -> void:
 		"build":
 			var t: int = pend["tile"]
 			var cur: int = engine.level[t]
-			decision_title.text = "Nâng cấp %s?" % BoardData.plain_name(t) if cur > 0 else "Xây công trình tại %s?" % BoardData.plain_name(t)
+			var bt := engine.building_type(t)
+			var bname := bt.name if bt else "công trình"
+			decision_title.text = ("Nâng cấp %s ở %s?" % [bname, BoardData.plain_name(t)]) if cur > 0 else ("Xây %s ở %s?" % [bname, BoardData.plain_name(t)])
 			var rm: Array = EconomyConfig.get_default().rent_mult
-			decision_desc.text = "Hiện tại: %s · thuê %s xu. Lên cấp cao hơn: thuê cơ bản ×%s." % [GameEngine.LEVEL_NAMES[cur], BoardData.money(engine.rent(t)), str(rm[mini(cur + 1, rm.size() - 1)])]
+			var next_mult: float = bt.at(bt.rent_mult, cur + 1) if bt else float(rm[mini(cur + 1, rm.size() - 1)])
+			decision_desc.text = "Hiện tại: %s · thuê %s xu. Cấp tiếp theo: thuê cơ bản %s xu." % [engine.building_label(t), BoardData.money(engine.rent(t)), BoardData.money(_round5(int(BoardData.tile(t)["price"]) * next_mult))]
 			for o in pend["options"]:
 				var lv: int = o["level"]
-				_add_btn("Lên %s — %s xu" % [GameEngine.LEVEL_NAMES[lv], BoardData.money(o["cost"])], {"action": "build", "level": lv}, true)
+				var lvname := "Danh Thắng" if lv >= GameEngine.LANDMARK else "Cấp %d" % lv
+				_add_btn("Lên %s — %s xu" % [lvname, BoardData.money(o["cost"])], {"action": "build", "level": lv}, true)
 			_add_btn("Để sau", {"action": "pass"})
 		"takeover":
 			var t: int = pend["tile"]
@@ -599,7 +611,7 @@ func tile_summary(t: int) -> String:
 		var o: int = engine.owner[t]
 		if o < 0:
 			return "%s · Chưa có chủ · Giá %s xu" % [name, BoardData.money(td["price"])]
-		return "%s · Chủ: %s · %s · Thuê %s xu" % [name, engine.players[o]["name"], GameEngine.LEVEL_NAMES[engine.level[t]], BoardData.money(engine.rent(t))]
+		return "%s · Chủ: %s · %s · Thuê %s xu" % [name, engine.players[o]["name"], engine.building_label(t), BoardData.money(engine.rent(t))]
 	return name
 
 
@@ -757,15 +769,18 @@ func show_tile_info(t: int) -> void:
 		lines.append("Giá đất: %s xu" % BoardData.money(td["price"]))
 		var o: int = engine.owner[t]
 		if o >= 0:
-			lines.append("Chủ: [color=%s]%s[/color] · %s" % [colors[o], engine.players[o]["name"], GameEngine.LEVEL_NAMES[engine.level[t]]])
+			lines.append("Chủ: [color=%s]%s[/color] · %s" % [colors[o], engine.players[o]["name"], engine.building_label(t)])
 			lines.append("Tiền thuê hiện tại: [b]%s xu[/b]" % BoardData.money(engine.rent(t)))
 		else:
 			lines.append("Chưa có chủ")
 		var rents: Array = []
-		var rm: Array = EconomyConfig.get_default().rent_mult
-		for l in rm.size():
-			rents.append(BoardData.money(_round5(td["price"] * float(rm[l]))))
-		lines.append("Thuê cơ bản theo cấp: " + " / ".join(rents))
+		var bt := engine.building_type(t)
+		if bt:
+			for l in range(1, GameEngine.LANDMARK + 1):
+				rents.append(BoardData.money(_round5(td["price"] * bt.at(bt.rent_mult, l))))
+			lines.append("Thuê %s cấp 1 / 2 / Danh Thắng: %s" % [bt.name, " / ".join(rents)])
+		else:
+			lines.append("Thuê đất trống: %s · chưa chọn loại công trình" % BoardData.money(_round5(td["price"] * float(EconomyConfig.get_default().rent_mult[0]))))
 		lines.append("Đặc sản: %s" % td["specialty"])
 		lines.append("Danh thắng: %s" % td["landmark"])
 		if t == engine.festival_tile:

@@ -97,6 +97,8 @@ static func decide(e: GameEngine, pend: Dictionary) -> Dictionary:
 			return {"action": "pass"}
 		"auction_bid":
 			return AuctionRules.ai_decide(e, pend)
+		"choose_building":
+			return choose_building(e, pid, pend, reserve)
 		"draw_card":
 			return {"action": "draw"}
 		"card_reveal":
@@ -258,3 +260,45 @@ static func _card_tile(e: GameEngine, pid: int, pend: Dictionary, reserve: int) 
 	if best < 0:
 		return {"action": "pass"}
 	return {"action": "pick_tile", "tile": best}
+
+
+## Chọn loại công trình theo tính cách và tình huống: giai đoạn ván, lượng người qua lại, giá xây.
+static func choose_building(e: GameEngine, pid: int, pend: Dictionary, reserve: int) -> Dictionary:
+	var cfg := EconomyConfig.get_default()
+	var per := cfg.personality(e.players[pid]["character"])
+	var prefs: Dictionary = per.get("build_pref", {})
+	var t: int = pend["tile"]
+	var price := float(BoardData.tile(t)["price"])
+	var progress := clampf(float(e.round_num - 1) / maxf(1.0, e.max_rounds - 1.0), 0.0, 1.0)
+	var remaining := 1.0 - progress
+	# đoạn sau Kẹt Xe và sau Km 0 là nơi đông người qua lại nhất
+	var busy := (t > BoardData.JAIL_TILE and t <= BoardData.JAIL_TILE + 12) or t <= 8
+	var traffic := 1.0 if busy else 0.6
+	var cash: int = e.players[pid]["cash"]
+	var best := ""
+	var best_score := -INF
+	for o in pend["options"]:
+		if not o["ok"] or cash - int(o["cost"]) < reserve:
+			continue
+		var id: String = o["id"]
+		var bt := cfg.building(id)
+		var s: float = bt.at(bt.rent_mult, 1)
+		# giá trị kỳ vọng xấp xỉ (đơn vị: × giá đất), các hằng số rút ra từ mô phỏng
+		match id:
+			"restaurant":
+				s *= 0.9 + 0.2 * traffic
+			"homestay":
+				s += bt.at(bt.lap_income, 1) * 3.5 * remaining
+			"market":
+				s += bt.at(bt.pass_fee, 1) * 6.0 * traffic
+			"workshop":
+				s += 0.3 * (0.4 + remaining)
+		s -= float(o["cost"]) / price * 0.3
+		s *= float(prefs.get(id, 1.0)) * e.rng.randf_range(0.9, 1.1)
+		if s > best_score:
+			best_score = s
+			best = id
+	if best == "":
+		return {"action": "later"}
+	return {"action": "choose", "type": best}
+

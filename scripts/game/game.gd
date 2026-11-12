@@ -44,7 +44,7 @@ var _shot_dir := ""
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo")
+	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo") or args.has("--pickerdemo")
 	for a in args:
 		if a.begins_with("--carddemo="):
 			_autotest = true
@@ -98,6 +98,8 @@ func _ready() -> void:
 	hud.cam_toggled.connect(_on_cam_toggled)
 	hud.auction_panel.bid.connect(func(k): _submit_auction({"action": "bid", "steps": k}))
 	hud.auction_panel.fold.connect(func(): _submit_auction({"action": "fold"}))
+	hud.building_picker.chosen.connect(func(id): _submit_choice({"action": "choose", "type": id}))
+	hud.building_picker.later.connect(func(): _submit_choice({"action": "later"}))
 	cinematic_on = Global.cinematic > 0
 	hud.set_cam_auto(cinematic_on)
 	Global.settings_changed.connect(_apply_settings)
@@ -143,6 +145,12 @@ func _ready() -> void:
 		if a.begins_with("--carddemo="):
 			_card_demo(a.substr(11))
 			return
+	if args.has("--pickerdemo"):
+		# Kiểm thử hình ảnh: bạn vừa sở hữu Hà Nội → chọn loại công trình
+		engine._events = []
+		engine._set_tile(BoardData.find_tile("Hà Nội"), human_id, 0)
+		engine.offer_building_choice(human_id, BoardData.find_tile("Hà Nội"))
+		events.append_array(engine._events)
 	if args.has("--auctiondemo"):
 		# Kiểm thử hình ảnh: Máy · An bỏ qua Hà Nội → đấu giá, người chơi tham gia
 		engine._events = []
@@ -410,7 +418,7 @@ func _play(ev: Dictionary) -> void:
 			var grew: bool = ev["owner"] >= 0 and (ev["level"] > board._shown_level[t_ev] or ev["owner"] != board._shown_owner[t_ev])
 			var new_owner: bool = ev["owner"] >= 0 and ev["owner"] != board._shown_owner[t_ev]
 			board.anim_speed = speed
-			board.set_tile_state(t_ev, ev["owner"], ev["level"])
+			board.set_tile_state(t_ev, ev["owner"], ev["level"], true, String(ev.get("kind", "")))
 			if new_owner:
 				Audio.play("buy_keng", 0.05, -2.0)
 			if ev["owner"] >= 0 and ev["owner"] == engine.current:
@@ -421,6 +429,23 @@ func _play(ev: Dictionary) -> void:
 			board.set_festival(ev["tile"])
 		"card":
 			pass
+		"rent":
+			var payer: int = ev["p"]
+			var own: int = ev["owner"]
+			if (payer == human_id or own == human_id) and not engine.players[human_id]["is_bot"]:
+				hud.show_banner("%s trả %s xu thuê cho %s\n%s · %s" % [engine.players[payer]["name"], BoardData.money(ev["amount"]), engine.players[own]["name"], ev["label"], BoardData.plain_name(ev["tile"])], 1.6 / speed)
+		"building":
+			var bt := EconomyConfig.get_default().building(ev["type"])
+			if bt:
+				hud.show_banner("%s xây %s ở %s!" % [engine.players[ev["p"]]["name"], bt.name, BoardData.plain_name(ev["tile"])], 1.2 / speed)
+		"passive":
+			match String(ev["kind"]):
+				"homestay":
+					_float_text(ev["p"], "+%s Homestay" % BoardData.money(ev["amount"]), Color("#a1887f"))
+				"market":
+					_float_text(ev["p"], "+%s phí chợ" % BoardData.money(ev["amount"]), Color("#ffb74d"))
+				"workshop":
+					_float_text(ev["p"], "+%d đặc sản" % int(ev["amount"]), Color("#81c784"))
 		"auction_start":
 			var human_in: bool = (ev["bidders"] as Array).has(human_id) and not engine.players[human_id]["is_bot"]
 			_auction_fast = not human_in
@@ -530,6 +555,9 @@ func _after_queue() -> void:
 	if pend["type"] == "auction_bid":
 		await _auction_step(pend, p)
 		return
+	if pend["type"] == "choose_building":
+		await _choose_step(pend, p)
+		return
 	if pend["type"] == "turn":
 		_set_state(TurnState.WAITING_FOR_ROLL)
 		hud.set_focus(false)
@@ -569,6 +597,32 @@ func _auction_step(pend: Dictionary, p: Dictionary) -> void:
 	if engine.pending != pend:
 		return
 	_feed(engine.act(pend["p"], BotAI.decide(engine, pend)))
+
+
+## Chọn loại công trình: người chơi thật dùng panel 4 thẻ, máy tự chọn theo tính cách.
+func _choose_step(pend: Dictionary, p: Dictionary) -> void:
+	hud.show_waiting("")
+	hud.hide_roll()
+	if not p["is_bot"]:
+		hud.building_picker.open(pend)
+		if _autotest and not OS.get_cmdline_user_args().has("--pickerdemo"):
+			await get_tree().create_timer(0.8).timeout
+			hud.building_picker.autopress()
+		return
+	hud.show_waiting("%s đang chọn công trình..." % p["name"])
+	await get_tree().create_timer(0.4 / speed).timeout
+	if engine.pending != pend:
+		return
+	hud.show_waiting("")
+	_feed(engine.act(pend["p"], BotAI.decide(engine, pend)))
+
+
+func _submit_choice(action: Dictionary) -> void:
+	if _busy or engine.pending.is_empty() or engine.pending["type"] != "choose_building" or engine.pending["p"] != human_id:
+		return
+	var evs := engine.act(human_id, action)
+	if not evs.is_empty():
+		_feed(evs)
 
 
 func _submit_auction(action: Dictionary) -> void:

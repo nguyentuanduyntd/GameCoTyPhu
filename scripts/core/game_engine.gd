@@ -20,7 +20,7 @@ const MAX_SPECIALTIES := 9
 const LANDMARK := 3
 const INFRA_RENT := [0, 50, 100, 200, 400]
 const TAKEOVER_MULT := 1.5
-const MAX_LEVEL_ON_BUY := 1
+const MAX_LEVEL_ON_BUY := 0   # mua chỉ mua đất; công trình chọn ở bước sau
 const SEASON_ROUNDS := 2
 const MAX_CARDS := 3
 const FREE_RENT_THRESHOLD := 150
@@ -61,6 +61,7 @@ var _decks: Dictionary = {}
 var charity_pot: int = 0
 var blackout_round: int = -1
 var auction: Dictionary = {}   # trạng thái đấu giá đang diễn ra (xem AuctionRules)
+var btype: Array = []          # loại công trình mỗi ô tỉnh ("" = chưa chọn), xem data/buildings/
 var _bonus_roll: bool = false
 var _group_tiles: Array = []
 
@@ -101,6 +102,8 @@ func setup(configs: Array, p_seed: int = 0, p_max_rounds: int = 25) -> Array:
 	owner.fill(-1)
 	level.resize(BoardData.TILE_COUNT)
 	level.fill(0)
+	btype.resize(BoardData.TILE_COUNT)
+	btype.fill("")
 	_group_tiles.clear()
 	for g in BoardData.GROUPS.size():
 		_group_tiles.append([])
@@ -169,8 +172,43 @@ func owned_tiles(pid: int) -> Array:
 	return res
 
 
+func building_type(t: int) -> BuildingType:
+	return _cfg.building(btype[t]) if btype[t] != "" else null
+
+
+## Tên công trình hiển thị: "Đất trống", "Nhà hàng · Cấp 2", "Danh Thắng (Chợ)".
+func building_label(t: int) -> String:
+	var bt := building_type(t)
+	if level[t] <= 0 or bt == null:
+		return LEVEL_NAMES[level[t]] if bt == null else "%s (chưa xây)" % bt.name
+	if level[t] >= LANDMARK:
+		return "Danh Thắng (%s)" % bt.name
+	return "%s · Cấp %d" % [bt.name, level[t]]
+
+
 func base_build_cost(t: int, lvl: int) -> int:
+	var bt := building_type(t)
+	if bt:
+		return _round5(BoardData.tile(t)["price"] * bt.at(bt.build_mult, lvl))
 	return _round5(BoardData.tile(t)["price"] * _cfg.build_mult[lvl])
+
+
+## Giá xây cấp 1 nếu chọn loại type_id (có giảm giá Thợ Hồ).
+func type_build_cost(pid: int, t: int, type_id: String) -> int:
+	var bt := _cfg.building(type_id)
+	var c: float = BoardData.tile(t)["price"] * bt.at(bt.build_mult, 1)
+	if players[pid]["character"] == "tho_ho":
+		c *= 0.85
+	return _round5(c)
+
+
+## Các lựa chọn loại công trình cho ô t: [{id, name, cost, ok}].
+func building_choices(pid: int, t: int) -> Array:
+	var res: Array = []
+	for bt in _cfg.building_types:
+		var cost := type_build_cost(pid, t, bt.id)
+		res.append({"id": bt.id, "name": bt.name, "cost": cost, "ok": int(players[pid]["cash"]) >= cost})
+	return res
 
 
 func build_cost(pid: int, t: int, lvl: int) -> int:
@@ -227,7 +265,11 @@ func rent(t: int) -> int:
 		return _round5(INFRA_RENT[infra_count(o)] * (0.5 if blackout_round == round_num else 1.0))
 	if td["type"] == BoardData.T.TOLL:
 		return TOLL_FEE * TOLL_LAND_MULT
-	var r: float = td["price"] * _cfg.rent_mult[level[t]]
+	var bt := building_type(t)
+	var mult: float = _cfg.rent_mult[0] if (level[t] <= 0 or bt == null) else bt.at(bt.rent_mult, level[t])
+	var r: float = td["price"] * mult
+	if bt and level[t] > 0 and season == 0:
+		r *= 1.0 + bt.tet_rent_bonus
 	if owns_group(o, td["group"]):
 		r *= 2.0
 	if t == festival_tile:
@@ -272,7 +314,7 @@ func buy_options(pid: int, t: int) -> Array:
 
 func build_options(pid: int, t: int) -> Array:
 	var res: Array = []
-	if not BoardData.is_province(t) or owner[t] != pid:
+	if not BoardData.is_province(t) or owner[t] != pid or btype[t] == "":
 		return res
 	var cur: int = level[t]
 	var cash: int = players[pid]["cash"]
@@ -374,6 +416,8 @@ func _apply(a: Dictionary) -> bool:
 	var ptype: String = pending["type"]
 	if ptype == "auction_bid":
 		return AuctionRules.apply(self, pending["p"], a)
+	if ptype == "choose_building":
+		return _act_choose(pending["p"], kind, a)
 	match ptype:
 		"turn":
 			return _act_turn(p, kind, a)
@@ -555,11 +599,42 @@ func _act_buy(p: Dictionary, kind: String, a: Dictionary) -> bool:
 	pending = {}
 	_pay(p, opt["cost"], -1, "Mua đất")
 	_set_tile(t, p["id"], lvl)
-	if lvl > 0:
-		_log("%s mua %s và xây %s (%s)." % [p["name"], BoardData.plain_name(t), LEVEL_NAMES[lvl], BoardData.money(opt["cost"])])
-	else:
-		_log("%s mua %s (%s)." % [p["name"], BoardData.plain_name(t), BoardData.money(opt["cost"])])
+	_log("%s mua %s (%s)." % [p["name"], BoardData.plain_name(t), BoardData.money(opt["cost"])])
 	_check_domination(p["id"])
+	if not game_over:
+		offer_building_choice(p["id"], t)
+	return true
+
+
+## Sau khi sở hữu ô tỉnh (mua thường / thắng đấu giá / quay lại ô chưa xây): chọn loại công trình.
+func offer_building_choice(pid: int, t: int) -> void:
+	if not BoardData.is_province(t) or owner[t] != pid or btype[t] != "" or not players[pid]["alive"]:
+		return
+	pending = {"type": "choose_building", "p": pid, "tile": t, "options": building_choices(pid, t)}
+
+
+func _act_choose(pid: int, kind: String, a: Dictionary) -> bool:
+	var t: int = pending["tile"]
+	var p: Dictionary = players[pid]
+	if kind == "later":
+		pending = {}
+		_log("%s để sau, chưa xây gì ở %s." % [p["name"], BoardData.plain_name(t)])
+		return true
+	if kind != "choose":
+		return false
+	var id: String = a.get("type", "")
+	var bt := _cfg.building(id)
+	if bt == null:
+		return false
+	var cost := type_build_cost(pid, t, id)
+	if int(p["cash"]) < cost:
+		return false
+	pending = {}
+	_pay(p, cost, -1, "Xây %s" % bt.name)
+	btype[t] = id
+	_set_tile(t, pid, 1)
+	_push({"t": "building", "p": pid, "tile": t, "type": id, "level": 1})
+	_log("%s xây %s tại %s (%s)." % [p["name"], bt.name, BoardData.plain_name(t), BoardData.money(cost)])
 	return true
 
 
@@ -766,6 +841,7 @@ func _new_round() -> void:
 		_finish(alive[0], "rounds")
 		return
 	_push({"t": "round", "n": round_num})
+	_workshop_round()
 	if (round_num - 1) % SEASON_ROUNDS == 0:
 		_change_season()
 
@@ -866,6 +942,7 @@ func _move(p: Dictionary, steps: int, fast: bool = false) -> void:
 	var dir := 1 if steps >= 0 else -1
 	var passed_start := false
 	var tolls: Array = []
+	var markets: Array = []
 	var n := absi(steps)
 	for i in n:
 		pos = posmod(pos + dir, BoardData.TILE_COUNT)
@@ -874,6 +951,8 @@ func _move(p: Dictionary, steps: int, fast: bool = false) -> void:
 			passed_start = true
 		if dir > 0 and not fast and i < n - 1 and BoardData.tile(pos)["type"] == BoardData.T.TOLL:
 			tolls.append(pos)
+		if dir > 0 and not fast and i < n - 1 and btype[pos] == "market":
+			markets.append(pos)
 	p["pos"] = pos
 	_push({"t": "move", "p": p["id"], "path": path, "fast": fast})
 	if passed_start:
@@ -884,6 +963,7 @@ func _move(p: Dictionary, steps: int, fast: bool = false) -> void:
 			amt += 100
 		_add_cash(p, amt, "Lương qua Km 0")
 		_log("%s qua Km 0, nhận lương %s." % [p["name"], BoardData.money(amt)])
+		_homestay_income(p)
 	for t in tolls:
 		var o: int = owner[t]
 		if o == p["id"] or p["character"] == "xe_om":
@@ -895,6 +975,10 @@ func _move(p: Dictionary, steps: int, fast: bool = false) -> void:
 			_log("%s qua Trạm BOT, nộp %s vào Quỹ Từ Thiện." % [p["name"], BoardData.money(TOLL_FEE)])
 			_pay(p, TOLL_FEE, -1, "Phí BOT", true)
 		_push({"t": "toll", "p": p["id"], "tile": t})
+		if not p["alive"]:
+			return
+	for t in markets:
+		_market_fee(p, t)
 		if not p["alive"]:
 			return
 
@@ -968,6 +1052,9 @@ func _land_property(p: Dictionary, t: int) -> void:
 		else:
 			_log("%s không đủ tiền mua %s." % [p["name"], BoardData.plain_name(t)])
 	elif o == p["id"]:
+		if BoardData.is_province(t) and btype[t] == "":
+			offer_building_choice(p["id"], t)
+			return
 		var bo := build_options(p["id"], t)
 		if bo.size() > 0:
 			pending = {"type": "build", "p": p["id"], "tile": t, "options": bo}
@@ -977,10 +1064,15 @@ func _land_property(p: Dictionary, t: int) -> void:
 			_use_card(p, "MIEN_THUE")
 			_log("%s dùng Miễn Thuê, không phải trả %s tại %s." % [p["name"], BoardData.money(r), BoardData.plain_name(t)])
 		else:
-			_log("%s trả %s tiền thuê cho %s tại %s." % [p["name"], BoardData.money(r), players[o]["name"], BoardData.plain_name(t)])
+			_log("%s trả %s tiền thuê cho %s tại %s (%s)." % [p["name"], BoardData.money(r), players[o]["name"], BoardData.plain_name(t), building_label(t)])
+			_push({"t": "rent", "p": p["id"], "owner": o, "tile": t, "amount": r, "label": building_label(t)})
 			_pay(p, r, o, "Tiền thuê")
 		if not p["alive"]:
 			return
+		if btype[t] == "market" and level[t] > 0:
+			_market_fee(p, t)
+			if not p["alive"]:
+				return
 		if BoardData.is_province(t):
 			_give_specialty(p, t)
 		if level[t] < LANDMARK and owner[t] == o and players[o]["alive"]:
@@ -996,6 +1088,53 @@ func _send_jail(p: Dictionary) -> void:
 	p["doubles"] = 0
 	_bonus_roll = false
 	_push({"t": "jail", "p": p["id"]})
+
+
+# ---------------------------------------------------------------- thu nhập thụ động của công trình
+
+## Homestay: chủ đi qua Km 0 nhận thêm thu nhập theo từng homestay đang có.
+func _homestay_income(p: Dictionary) -> void:
+	var total := 0
+	for t in owned_tiles(p["id"]):
+		var bt := building_type(t)
+		if bt and level[t] > 0:
+			total += _round5(int(BoardData.tile(t)["price"]) * bt.at(bt.lap_income, level[t]))
+	if total > 0:
+		_add_cash(p, total, "Homestay")
+		_push({"t": "passive", "p": p["id"], "kind": "homestay", "amount": total})
+		_log("%s nhận %s xu từ Homestay." % [p["name"], BoardData.money(total)])
+
+
+## Chợ: người khác đi qua / dừng nộp phí vào chợ; chủ nhận phần lớn, phần còn lại vào Quỹ Từ Thiện.
+func _market_fee(p: Dictionary, t: int) -> void:
+	var o: int = owner[t]
+	var bt := building_type(t)
+	if o < 0 or o == p["id"] or bt == null or level[t] <= 0 or not players[o]["alive"]:
+		return
+	var fee := _round5(int(BoardData.tile(t)["price"]) * bt.at(bt.pass_fee, level[t]))
+	if fee <= 0:
+		return
+	var owner_part := _round5(fee * bt.fee_owner_share)
+	var pot_part := fee - owner_part
+	_log("%s nộp %s xu phí chợ %s." % [p["name"], BoardData.money(fee), BoardData.plain_name(t)])
+	_pay(p, owner_part, o, "Phí chợ")
+	if p["alive"] and pot_part > 0:
+		_pay(p, pot_part, -1, "Phí chợ", true)
+	_push({"t": "passive", "p": o, "kind": "market", "amount": owner_part, "tile": t})
+
+
+## Xưởng đặc sản: đầu mỗi vòng chủ nhận đặc sản của tỉnh.
+func _workshop_round() -> void:
+	for t in BoardData.TILE_COUNT:
+		var o: int = owner[t]
+		var bt := building_type(t)
+		if o < 0 or bt == null or level[t] <= 0 or not players[o]["alive"]:
+			continue
+		var n := int(bt.at(bt.specialties_per_round, level[t]))
+		for k in n:
+			_give_specialty(players[o], t)
+		if n > 0:
+			_push({"t": "passive", "p": o, "kind": "workshop", "amount": n, "tile": t})
 
 
 # ---------------------------------------------------------------- thẻ
@@ -1183,7 +1322,7 @@ func card_tile_options(pid: int, c: Dictionary) -> Array:
 					res.append(t)
 		"build_anywhere":
 			for t in owned_tiles(pid):
-				if not BoardData.is_province(t) or level[t] >= LANDMARK:
+				if not BoardData.is_province(t) or level[t] >= LANDMARK or btype[t] == "":
 					continue
 				if level[t] == LANDMARK - 1 and group_count(pid, BoardData.tile(t)["group"]) < _cfg.landmark_group_min:
 					continue
@@ -1328,7 +1467,7 @@ func _resolve_tile(p: Dictionary, c: Dictionary, t: int) -> void:
 func _upgrade_random(p: Dictionary) -> bool:
 	var cands: Array = []
 	for t in owned_tiles(p["id"]):
-		if BoardData.is_province(t) and level[t] < LANDMARK - 1:
+		if BoardData.is_province(t) and level[t] < LANDMARK - 1 and btype[t] != "":
 			cands.append(t)
 	if cands.is_empty():
 		return false
@@ -1552,10 +1691,12 @@ func _sorted_by_worth(ids: Array) -> Array:
 func _set_tile(t: int, o: int, l: int) -> void:
 	owner[t] = o
 	level[t] = l
+	if o == -1:
+		btype[t] = ""
 	if o == -1 and festival_tile == t:
 		festival_tile = -1
 		_push({"t": "festival", "tile": -1})
-	_push({"t": "tile", "tile": t, "owner": o, "level": l})
+	_push({"t": "tile", "tile": t, "owner": o, "level": l, "kind": btype[t]})
 
 
 func _random_province() -> int:

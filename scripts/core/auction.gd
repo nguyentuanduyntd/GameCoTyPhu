@@ -139,6 +139,8 @@ static func _finish(e: GameEngine) -> void:
 	e._push({"t": "auction_end", "tile": t, "winner": winner, "price": price})
 	e._log("%s THẮNG ĐẤU GIÁ %s với giá %s!" % [e.players[winner]["name"], BoardData.plain_name(t), BoardData.money(price)])
 	e._check_domination(winner)
+	if not e.game_over:
+		e.offer_building_choice(winner, t)
 
 
 # ---------------------------------------------------------------- AI đấu giá theo tính cách

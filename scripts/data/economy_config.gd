@@ -10,6 +10,8 @@ extends Resource
 @export var build_mult: Array[float] = [0.0, 0.6, 0.9, 1.4]
 ## Danh Thắng cần sở hữu ít nhất bao nhiêu tỉnh trong vùng.
 @export var landmark_group_min: int = 2
+## Các loại công trình người chơi chọn sau khi sở hữu ô tỉnh (data/buildings/*.tres).
+@export var building_types: Array = []
 
 @export_group("Đấu giá")
 ## Giá khởi điểm = tỉ lệ × giá niêm yết.
@@ -48,6 +50,7 @@ extends Resource
 ##  jump        — xác suất nhảy giá +2/+3 bước
 ##  reserve     — hệ số tiền an toàn (cao = giữ tiền kỹ)
 ##  random      — độ ngẫu nhiên riêng (bỏ trống thì dùng ai_random)
+##  build_pref  — mức ưa thích từng loại công trình {id: hệ số}
 @export var personalities: Dictionary = {}
 
 
@@ -64,11 +67,18 @@ static func get_default() -> EconomyConfig:
 
 
 func personality(character_id: String) -> Dictionary:
-	var base := {"bid_mult": 1.0, "group_bonus": 0.25, "infra_bonus": 0.0, "jump": 0.2, "reserve": 1.0, "random": ai_random, "label": ""}
+	var base := {"bid_mult": 1.0, "group_bonus": 0.25, "infra_bonus": 0.0, "jump": 0.2, "reserve": 1.0, "random": ai_random, "label": "", "build_pref": {}}
 	var p: Dictionary = personalities.get(character_id, {})
 	for k in p.keys():
 		base[k] = p[k]
 	return base
+
+
+func building(id: String) -> BuildingType:
+	for b in building_types:
+		if b and b.id == id:
+			return b
+	return null
 
 
 func round_price(v: float) -> int:
