@@ -1,0 +1,12 @@
+# Godot
+.godot/
+/android/
+/build/
+*.tmp
+
+# Ảnh chụp kiểm thử
+/screenshots/
+
+# OS
+Thumbs.db
+.DS_Store
