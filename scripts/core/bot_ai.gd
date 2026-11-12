@@ -38,7 +38,7 @@ static func decide(e: GameEngine, pend: Dictionary) -> Dictionary:
 		"buy":
 			var t: int = pend["tile"]
 			var opts: Array = pend["options"]
-			if diff == 0 and e.rng.randf() < 0.25:
+			if diff == 0 and e.ai_rng.randf() < 0.25:
 				return {"action": "pass"}
 			var need := reserve
 			if BoardData.is_province(t):
@@ -71,7 +71,7 @@ static func decide(e: GameEngine, pend: Dictionary) -> Dictionary:
 				if e.group_count(pid, g) + 1 >= e.group_tiles(g).size():
 					worth = true
 			if diff == 0:
-				worth = e.rng.randf() < 0.3
+				worth = e.ai_rng.randf() < 0.3
 			return {"action": "takeover"} if worth else {"action": "pass"}
 		"festival":
 			var best := -1
@@ -83,8 +83,8 @@ static func decide(e: GameEngine, pend: Dictionary) -> Dictionary:
 					best = t
 			return {"action": "festival", "tile": best}
 		"lottery":
-			if diff == 0 and e.rng.randf() < 0.4:
-				return {"action": "bet", "amount": pend["bets"][0], "number": e.rng.randi_range(1, 6)}
+			if diff == 0 and e.ai_rng.randf() < 0.4:
+				return {"action": "bet", "amount": pend["bets"][0], "number": e.ai_rng.randi_range(1, 6)}
 			return {"action": "pass"}
 		"market":
 			var opts: Array = pend["options"]
@@ -294,7 +294,7 @@ static func choose_building(e: GameEngine, pid: int, pend: Dictionary, reserve: 
 			"workshop":
 				s += 0.3 * (0.4 + remaining)
 		s -= float(o["cost"]) / price * 0.3
-		s *= float(prefs.get(id, 1.0)) * e.rng.randf_range(0.9, 1.1)
+		s *= float(prefs.get(id, 1.0)) * e.ai_rng.randf_range(0.9, 1.1)
 		if s > best_score:
 			best_score = s
 			best = id

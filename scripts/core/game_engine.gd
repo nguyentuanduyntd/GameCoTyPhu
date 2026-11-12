@@ -54,6 +54,9 @@ var win_reason: String = ""
 var ranking: Array = []
 var eliminated: Array = []
 var rng := RandomNumberGenerator.new()
+## Bộ ngẫu nhiên RIÊNG cho bot (BotAI, đấu giá AI). Không thuộc trạng thái luật chơi:
+## online thì chỉ server cho bot suy nghĩ, các máy khác nhận nước đi → `rng` của mọi máy vẫn khớp nhau.
+var ai_rng := RandomNumberGenerator.new()
 
 var _cfg := EconomyConfig.get_default()
 var _events: Array = []
@@ -72,8 +75,10 @@ func setup(configs: Array, p_seed: int = 0, p_max_rounds: int = 25) -> Array:
 	_events = []
 	if p_seed == 0:
 		rng.randomize()
+		ai_rng.randomize()
 	else:
 		rng.seed = p_seed
+		ai_rng.seed = p_seed * 7919 + 17
 	max_rounds = p_max_rounds
 	players.clear()
 	for i in configs.size():
@@ -399,6 +404,56 @@ func market_options(pid: int) -> Array:
 
 # ---------------------------------------------------------------- hành động
 
+## Mã kiểm tra trạng thái ván (để các máy online so với server, phát hiện lệch).
+## Gồm mọi thứ ảnh hưởng luật chơi; bỏ phần chỉ AI dùng (auction["ai"]) và bộ ngẫu nhiên của bot.
+func state_hash() -> String:
+	var auc := auction.duplicate()
+	auc.erase("ai")
+	var snap := [players, owner, level, btype, current, round_num, max_rounds, season, season_event,
+		festival_tile, pending, game_over, winner, eliminated, _decks, charity_pot, blackout_round,
+		auc, _bonus_roll, rng.state]
+	return var_to_str(snap).md5_text()
+
+
+## Phương án an toàn khi người chơi hết giờ suy nghĩ (online): bỏ lượt / bỏ qua / bỏ đấu giá...
+## Bước bắt buộc (rút thẻ, xác nhận thẻ) thì làm bước đó. Luôn là hành động hợp lệ với `pend`.
+static func timeout_action(pend: Dictionary) -> Dictionary:
+	match String(pend.get("type", "")):
+		"turn":
+			return {"action": "skip"}
+		"jail":
+			return {"action": "roll"}
+		"train":
+			return {"action": "skip"}
+		"auction_bid":
+			return {"action": "fold"}
+		"choose_building":
+			return {"action": "later"}
+		"draw_card":
+			return {"action": "draw"}
+		"card_reveal":
+			return {"action": "confirm"}
+		"card_pick":
+			return {"action": "pick", "index": 0}
+	return {"action": "pass"}
+
+
+## Xử thua người chơi `pid` (online: hết giờ quá số lần cho phép). Chỉ server gọi, đúng lúc đang chờ `pid`.
+## Giải quyết nốt bước đang chờ của họ (bỏ đấu giá / để sau / phương án an toàn) rồi xử phá sản.
+func forfeit(pid: int) -> Array:
+	_events = []
+	if game_over or pid < 0 or pid >= players.size() or not players[pid]["alive"]:
+		return _events
+	var p: Dictionary = players[pid]
+	if not pending.is_empty() and int(pending["p"]) == pid and pid != current:
+		_apply(timeout_action(pending))
+	_log("%s bị loại vì vắng mặt quá lâu." % p["name"])
+	_bankrupt(p)
+	if not game_over and pending.is_empty():
+		_end_turn()
+	return _events
+
+
 func act(pid: int, action: Dictionary) -> Array:
 	_events = []
 	if game_over or pending.is_empty() or pid != pending["p"]:
@@ -479,6 +534,12 @@ func _apply(a: Dictionary) -> bool:
 
 func _act_turn(p: Dictionary, kind: String, a: Dictionary) -> bool:
 	match kind:
+		"skip":
+			# Chỉ server online dùng (người chơi hết giờ): bỏ lượt, không tung
+			pending = {}
+			_bonus_roll = false
+			_log("%s hết giờ — bị bỏ lượt." % p["name"])
+			return true
 		"roll":
 			pending = {}
 			_roll_and_move(p, -1)

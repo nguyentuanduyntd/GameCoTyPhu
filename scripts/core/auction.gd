@@ -180,15 +180,15 @@ static func ai_decide(e: GameEngine, pend: Dictionary) -> Dictionary:
 	var rolls: Dictionary = a["ai"]
 	if not rolls.has(pid):
 		var r: float = float(per["random"]) + (0.1 if int(p["difficulty"]) == 0 else 0.0)
-		rolls[pid] = 1.0 + e.rng.randf_range(-r, r)
+		rolls[pid] = 1.0 + e.ai_rng.randf_range(-r, r)
 	var ceiling := estimate_value(e, pid, a["tile"], per) * float(per["bid_mult"]) * float(rolls[pid])
 	var reserve := maxf(cfg.ai_min_reserve, cfg.ai_reserve_ratio * e.net_worth(pid)) * float(per["reserve"])
 	var max_pay := minf(ceiling, float(p["cash"]) - reserve)
 	if price_for(a, 1) > max_pay:
 		return {"action": "fold"}
 	var k := 1
-	if int(a["leader"]) >= 0 and e.rng.randf() < float(per["jump"]):
-		var want := e.rng.randi_range(2, cfg.auction_max_raise_steps)
+	if int(a["leader"]) >= 0 and e.ai_rng.randf() < float(per["jump"]):
+		var want := e.ai_rng.randi_range(2, cfg.auction_max_raise_steps)
 		for kk in range(want, 1, -1):
 			if options.has(kk) and price_for(a, kk) <= max_pay:
 				k = kk
