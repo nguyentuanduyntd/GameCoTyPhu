@@ -147,6 +147,148 @@ static func card(deck_name: String, idx: int) -> Dictionary:
 	return deck(deck_name)[idx]
 
 
+## Nhóm hiệu ứng để chọn hoạt ảnh và biểu cảm Chú Ba:
+## gain (nhận tiền), loss (mất tiền), move (di chuyển), luck (may mắn), bad (vận xui), choice (cơ hội cần quyết định)
+static func category(c: Dictionary) -> String:
+	match String(c["kind"]):
+		"money", "money_each":
+			return "gain" if int(c["amount"]) > 0 else "loss"
+		"richest_gift", "specialty_money", "take_from", "bonus_tiles", "per_tile_gain", "support_build":
+			return "gain"
+		"pay_prev", "per_tile_pay", "region_pay", "repair":
+			return "loss"
+		"move_steps", "move_to", "move_ahead", "move_anywhere", "swap_pos":
+			return "move"
+		"extra_roll", "upgrade_free", "skill", "year_luck":
+			return "luck"
+		"jail", "one_die", "blackout", "market_fire":
+			return "bad"
+	return "choice"
+
+
+## Biểu cảm của Chú Ba theo kết quả lá bài.
+static func mood(c: Dictionary) -> String:
+	match category(c):
+		"gain", "luck":
+			return "happy"
+		"loss":
+			return "sad"
+		"bad":
+			return "confused"
+	return "surprised"
+
+
+static func icon_name(c: Dictionary) -> String:
+	var k := String(c["kind"])
+	match category(c):
+		"gain":
+			return "house" if k == "support_build" else "coins"
+		"loss":
+			return "house" if k == "repair" else "loss"
+		"move":
+			return "arrow"
+		"luck":
+			return "scroll" if k == "skill" else ("dice" if k == "year_luck" else "star")
+		"bad":
+			return "car" if k == "jail" else "cloud"
+	if k in ["gamble", "dice_parity", "duel_richest", "duel_choose"]:
+		return "dice"
+	if k in ["build_anywhere", "buy_remote", "sell_bonus", "move_festival"]:
+		return "house"
+	return "coins"
+
+
+## Dòng tóm tắt hiệu ứng in ở chân lá bài.
+static func summary(c: Dictionary) -> String:
+	var m := func(v) -> String: return BoardData.money(int(v))
+	match String(c["kind"]):
+		"money":
+			return ("+%s xu" if int(c["amount"]) > 0 else "−%s xu") % m.call(absi(int(c["amount"])))
+		"money_each":
+			return ("+%s xu từ mỗi người" if int(c["amount"]) > 0 else "−%s xu cho mỗi người") % m.call(absi(int(c["amount"])))
+		"richest_gift":
+			return "+%s xu từ người giàu nhất" % m.call(c["amount"])
+		"pay_prev":
+			return "−%s xu cho người lượt trước" % m.call(c["amount"])
+		"move_steps":
+			return ("Đi tiếp %d ô" if int(c["steps"]) > 0 else "Lùi lại %d ô") % absi(int(c["steps"]))
+		"move_to":
+			return "Đi tới " + BoardData.plain_name(int(c["tile"]))
+		"jail":
+			return "Vào Kẹt Xe"
+		"one_die":
+			return "Lượt sau chỉ tung 1 viên"
+		"extra_roll":
+			return "Được tung thêm 1 lần"
+		"skill":
+			return "Nhận thẻ " + String(SKILLS[c["card"]]["name"])
+		"upgrade_free":
+			return "Nâng 1 cấp nhà miễn phí"
+		"per_tile_pay":
+			return "−%s xu mỗi ô đất" % m.call(c["amount"])
+		"region_pay":
+			return "−%s xu mỗi tỉnh Miền Tây" % m.call(c["amount"])
+		"repair":
+			return "−%s xu mỗi cấp nhà" % m.call(c["amount"])
+		"year_luck":
+			return "Ra 6: +%s · Ra 1: −%s" % [m.call(c["win"]), m.call(c["lose"])]
+		"specialty_money":
+			return "+1 đặc sản · +%s xu" % m.call(c["amount"])
+		"blackout":
+			return "Tiền thuê −50% hết vòng"
+		"market_fire":
+			return "Mọi người mất 1 đặc sản"
+		"invest":
+			return "Bỏ %s → thu %s" % [m.call(c["cost"]), m.call(c["gain"])]
+		"loan":
+			return "Vay %s → trả %s" % [m.call(c["gain"]), m.call(c["cost"])]
+		"gamble":
+			return "Vốn %s · thắng %s" % [m.call(c["cost"]), m.call(c["win"])]
+		"dice_parity":
+			return "Chẵn +%s · Lẻ +%s" % [m.call(c["even"]), m.call(c["odd"])]
+		"duel_richest":
+			return "Thắng +%s · Thua −%s" % [m.call(c["win"]), m.call(c["lose"])]
+		"duel_choose":
+			return "Đấu xúc xắc ăn %s xu" % m.call(c["amount"])
+		"take_from":
+			return "+%s xu từ 1 người" % m.call(c["amount"])
+		"swap_pos":
+			return "Đổi chỗ với 1 người"
+		"buy_remote":
+			return "Mua đất từ xa" + (" giảm 20%" if float(c["discount"]) < 1.0 else "")
+		"sell_bonus":
+			return "Bán đất giá 150%"
+		"build_anywhere":
+			return "Xây nhà giảm 50%"
+		"move_ahead":
+			return "Chọn ô trong %d ô tới" % int(c["range"])
+		"move_anywhere":
+			return "Đi tới ô bất kỳ"
+		"move_festival":
+			return "Dời Lễ Hội về tỉnh bạn"
+		"bonus_tiles":
+			return "+%s xu (thêm %s nếu ≥ %d ô)" % [m.call(c["amount"]), m.call(c["extra"]), int(c["min"])]
+		"per_tile_gain":
+			return "+%s xu mỗi ô (tối đa %s)" % [m.call(c["amount"]), m.call(c["cap"])]
+		"support_build":
+			return "+%s xu · nâng 1 cấp nhà" % m.call(c["amount"])
+		"sell_specialties":
+			return "Bán đặc sản %s xu/món" % m.call(c["price"])
+	return ""
+
+
+## Số tiền hiển thị lớn khi lật bài (0 nếu không phải thẻ tiền cố định).
+static func amount_hint(c: Dictionary) -> int:
+	match String(c["kind"]):
+		"money", "money_each":
+			return int(c["amount"])
+		"richest_gift", "take_from", "specialty_money", "support_build", "bonus_tiles":
+			return int(c["amount"])
+		"pay_prev", "per_tile_pay", "region_pay", "repair":
+			return -int(c["amount"])
+	return 0
+
+
 static func character(id: String) -> Dictionary:
 	for c in CHARACTERS:
 		if c["id"] == id:

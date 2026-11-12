@@ -388,6 +388,30 @@ func _apply(a: Dictionary) -> bool:
 			return _act_lottery(p, kind, a)
 		"market":
 			return _act_market(p, kind)
+		"draw_card":
+			# Rút bài: chỉ bốc thẻ và cho xem, CHƯA áp dụng hiệu ứng
+			if kind != "draw":
+				return false
+			var deck: String = pending["deck"]
+			if deck == "co_hoi" and p["character"] == "hoc_sinh":
+				var two := [_draw(deck), _draw(deck)]
+				pending = {"type": "card_pick", "p": p["id"], "deck": deck, "cards": two}
+				_push({"t": "card_drawn", "p": p["id"], "deck": deck, "cards": two})
+			else:
+				var idx := _draw(deck)
+				pending = {"type": "card_reveal", "p": p["id"], "deck": deck, "idx": idx}
+				_push({"t": "card_drawn", "p": p["id"], "deck": deck, "cards": [idx]})
+			_log("%s rút bài %s..." % [p["name"], "Khí Vận" if deck == "khi_van" else "Cơ Hội"])
+			return true
+		"card_reveal":
+			# Xác nhận: lúc này hiệu ứng thẻ mới được áp dụng (đúng một lần)
+			if kind != "confirm":
+				return false
+			var dk: String = pending["deck"]
+			var ci: int = pending["idx"]
+			pending = {}
+			_apply_card(p, dk, ci)
+			return true
 		"card_pick":
 			if kind != "pick":
 				return false
@@ -887,13 +911,10 @@ func _land(p: Dictionary) -> void:
 		_log("%s dừng đúng Km 0, thưởng thêm %s!" % [p["name"], BoardData.money(SALARY)])
 	elif ty == BoardData.T.PROVINCE or ty == BoardData.T.INFRA or ty == BoardData.T.TOLL:
 		_land_property(p, t)
-	elif ty == BoardData.T.KHI_VAN:
-		_apply_card(p, "khi_van", _draw("khi_van"))
-	elif ty == BoardData.T.CO_HOI:
-		if p["character"] == "hoc_sinh":
-			pending = {"type": "card_pick", "p": p["id"], "deck": "co_hoi", "cards": [_draw("co_hoi"), _draw("co_hoi")]}
-		else:
-			_apply_card(p, "co_hoi", _draw("co_hoi"))
+	elif ty == BoardData.T.KHI_VAN or ty == BoardData.T.CO_HOI:
+		# Tạm khoá lượt: chờ người chơi bấm "RÚT BÀI"
+		var deck := "khi_van" if ty == BoardData.T.KHI_VAN else "co_hoi"
+		pending = {"type": "draw_card", "p": p["id"], "deck": deck}
 	elif ty == BoardData.T.TAX:
 		var amt := mini(200, _round5(net_worth(p["id"]) * 0.1))
 		_log("%s phải nộp thuế %s." % [p["name"], BoardData.money(amt)])

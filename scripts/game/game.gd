@@ -30,12 +30,17 @@ var sky_mat: ProceduralSkyMaterial
 var cam_auto := true
 var _cam_tween: Tween
 var _cam_look_z := 1.4
+var cards_ui: CardOverlay
+const CARD_STEPS := ["draw_card", "card_reveal", "card_pick"]
 var _shot_dir := ""
 
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase")
+	for a in args:
+		if a.begins_with("--carddemo="):
+			_autotest = true
 	for a in args:
 		if a.begins_with("--shot="):
 			_shot_dir = a.substr(7)
@@ -62,6 +67,10 @@ func _ready() -> void:
 
 	hud = Hud.new()
 	add_child(hud)
+	cards_ui = CardOverlay.new()
+	add_child(cards_ui)
+	cards_ui.draw_pressed.connect(_on_card_draw)
+	cards_ui.confirm_pressed.connect(_on_card_confirm)
 	var events := engine.setup(cfg, 0, Global.max_rounds)
 	hud.setup(engine, PLAYER_COLORS, human_id)
 	hud.set_speed_display(speed)
@@ -99,6 +108,10 @@ func _ready() -> void:
 		_start_autotest()
 	if args.has("--showcase"):
 		return
+	for a in args:
+		if a.begins_with("--carddemo="):
+			_card_demo(a.substr(11))
+			return
 	_feed(events)
 
 
@@ -356,9 +369,9 @@ func _play(ev: Dictionary) -> void:
 		"festival":
 			board.set_festival(ev["tile"])
 		"card":
-			Audio.play("card", 0.1)
-			var title := "KHÍ VẬN" if ev["deck"] == "khi_van" else "CƠ HỘI"
-			await hud.show_toast("%s — %s\n\n%s" % [title, ev["name"], ev["text"]], 1.9 / speed)
+			pass
+		"card_drawn":
+			await cards_ui.play_draw(ev["cards"])
 		"duel":
 			Audio.play("duel")
 			await dice.roll([ev["ra"], ev["rb"]], speed)
@@ -422,6 +435,9 @@ func _after_queue() -> void:
 	if pend.is_empty():
 		return
 	var p: Dictionary = engine.players[pend["p"]]
+	if CARD_STEPS.has(String(pend["type"])):
+		await _card_step(pend, p)
+		return
 	if p["is_bot"]:
 		hud.show_waiting("%s đang suy nghĩ..." % p["name"])
 		await get_tree().create_timer(0.45 / speed).timeout
@@ -435,6 +451,93 @@ func _after_queue() -> void:
 		if _autotest:
 			await get_tree().create_timer(0.6).timeout
 			hud.autotest_click()
+
+
+## Bộ bài Khí Vận / Cơ Hội: khoá lượt cho tới khi người chơi rút bài và bấm XÁC NHẬN.
+func _card_step(pend: Dictionary, p: Dictionary) -> void:
+	hud.clear_decision()
+	hud.show_waiting("")
+	var human: bool = not p["is_bot"]
+	match String(pend["type"]):
+		"draw_card":
+			if not cards_ui.is_open:
+				await cards_ui.open(pend["deck"], p["name"], speed)
+			if human:
+				cards_ui.show_draw_button()
+				if _autotest:
+					await get_tree().create_timer(0.5).timeout
+					cards_ui.autopress()
+			else:
+				await get_tree().create_timer(0.5 / speed).timeout
+				_submit_card({"action": "draw"})
+		"card_reveal", "card_pick":
+			var count: int = 2 if pend["type"] == "card_pick" else 1
+			if human:
+				cards_ui.show_confirm(count)
+				if _autotest:
+					await get_tree().create_timer(0.6).timeout
+					cards_ui.autopress()
+			else:
+				await get_tree().create_timer(0.9 / speed).timeout
+				var a := BotAI.decide(engine, pend)
+				await cards_ui.close(int(a.get("index", 0)))
+				_submit_card(a)
+
+
+## Kiểm thử hình ảnh bộ bài: --carddemo=<khi_van|co_hoi>:<chỉ số lá>[:<chỉ số lá 2>] --shot=<thư mục>
+func _card_demo(spec: String) -> void:
+	var parts := spec.split(":")
+	var ids: Array = []
+	for i in range(1, parts.size()):
+		ids.append(int(parts[i]))
+	await get_tree().create_timer(0.5).timeout
+	await cards_ui.open(parts[0], "Bạn", 1.0)
+	_demo_shot("card_1_open")
+	cards_ui.show_draw_button()
+	await get_tree().create_timer(0.4).timeout
+	_demo_shot("card_2_button")
+	cards_ui.autopress()
+	cards_ui.play_draw(ids)
+	await get_tree().create_timer(0.75).timeout
+	_demo_shot("card_3_shuffle")
+	await get_tree().create_timer(1.9).timeout
+	_demo_shot("card_4_reveal")
+	await get_tree().create_timer(1.6).timeout
+	cards_ui.show_confirm(ids.size())
+	await get_tree().create_timer(0.5).timeout
+	_demo_shot("card_5_confirm")
+	get_tree().quit()
+
+
+func _demo_shot(name: String) -> void:
+	if _shot_dir == "":
+		return
+	DirAccess.make_dir_recursive_absolute(_shot_dir)
+	get_viewport().get_texture().get_image().save_png(_shot_dir.path_join(name + ".png"))
+
+
+func _on_card_draw() -> void:
+	_submit_card({"action": "draw"})
+
+
+func _on_card_confirm(index: int) -> void:
+	var pend := engine.pending
+	if pend.is_empty() or not CARD_STEPS.has(String(pend["type"])):
+		return
+	await cards_ui.close(index)
+	if pend["type"] == "card_pick":
+		_submit_card({"action": "pick", "index": index})
+	else:
+		_submit_card({"action": "confirm"})
+
+
+## Gửi hành động của bước rút bài; engine kiểm tra hợp lệ nên hiệu ứng chỉ áp dụng đúng một lần.
+func _submit_card(action: Dictionary) -> void:
+	if _busy or engine.pending.is_empty() or not CARD_STEPS.has(String(engine.pending["type"])):
+		return
+	var evs := engine.act(engine.pending["p"], action)
+	if not evs.is_empty():
+		_feed(evs)
 
 
 func _on_speed_changed(s: float) -> void:

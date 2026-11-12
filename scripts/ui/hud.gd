@@ -332,6 +332,8 @@ func pick_tile(t: int) -> void:
 
 func show_decision(pend: Dictionary) -> void:
 	clear_decision()
+	if ["draw_card", "card_reveal", "card_pick"].has(String(pend["type"])):
+		return
 	waiting_label.text = ""
 	var p: Dictionary = engine.players[pend["p"]]
 	decision_panel.visible = true

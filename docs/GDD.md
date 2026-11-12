@@ -173,6 +173,13 @@ Mỗi khi tất cả người chơi đi xong 2 lượt → đổi mùa (Xuân �
 - Khoản đầu tư hoặc khoản vay có thời hạn hiện trên bảng người chơi và tự xử lý khi đến lượt.
 - Thẻ "giữ lại dùng sau" chính là Thẻ Kỹ Năng, chung giới hạn tối đa 3 thẻ. Thẻ Kỹ Năng có thêm **Miễn Phạt** (hủy 1 khoản Thuế hoặc phạt Khí Vận).
 
+**Trải nghiệm rút bài** (giống nhau cho người và máy):
+1. Quân cờ dừng ô Khí Vận / Cơ Hội → **khoá lượt**, bộ bài phóng to giữa màn hình, lơ lửng và nghiêng theo phối cảnh 3D, có ánh sáng, bóng đổ, hạt lấp lánh. Khí Vận tông đỏ – vàng, lưng bài là mặt trống đồng; Cơ Hội tông xanh lá – vàng, lưng bài là đồng xu lỗ vuông và bông lúa.
+2. Nút **RÚT BÀI** (có hiệu ứng rê chuột, nhấn) → bộ bài tách đôi, xen kẽ, xáo nhanh như chia bài thật → 1 lá bay ra, phóng lớn, lật mặt từ từ trên nền tia sáng.
+3. Mặt bài: biểu tượng minh hoạ, tên sự kiện, mô tả, dòng hiệu ứng. Hoạt ảnh theo nội dung: nhận tiền → đồng xu bay ra; mất tiền → chớp đỏ, lá bài rung, tiền rơi; di chuyển → mũi tên đường đi và quân cờ nhảy; may mắn → pháo giấy; vận xui → mây giông, sét.
+4. **Chú Ba** (người dẫn trò: áo bà ba, khăn rằn, ria mép) biểu cảm: vui mừng (nhận thưởng, may mắn), bất ngờ (cơ hội, di chuyển), buồn bã (mất tiền), hoang mang (vận xui).
+5. Nút **XÁC NHẬN** → giao diện đóng mượt, **lúc này engine mới áp dụng hiệu ứng thẻ** (đúng một lần, do engine kiểm tra trạng thái chờ), cập nhật tiền, tài sản, vị trí, rồi trả lượt. Bé Na Học Sinh thấy 2 lá và bấm **CHỌN LÁ NÀY**.
+
 **Bộ Khí Vận (30 thẻ)**
 
 | # | Tên thẻ | Nội dung |

@@ -23,7 +23,11 @@ var _cam: Camera3D
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	if args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase"):
+	var jump := args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase")
+	for a in args:
+		if a.begins_with("--carddemo="):
+			jump = true
+	if jump:
 		Global.bot_count = 5
 		Global.max_rounds = 15
 		Global.reroll_bots()

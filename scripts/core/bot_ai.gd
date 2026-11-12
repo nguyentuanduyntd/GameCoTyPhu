@@ -95,6 +95,10 @@ static func decide(e: GameEngine, pend: Dictionary) -> Dictionary:
 			if opts.has("buy_specialty") and diff >= 1 and cash > 1000:
 				return {"action": "buy_specialty"}
 			return {"action": "pass"}
+		"draw_card":
+			return {"action": "draw"}
+		"card_reveal":
+			return {"action": "confirm"}
 		"card_pick":
 			var cards: Array = pend["cards"]
 			var a: int = CardsData.card(pend["deck"], cards[0])["value"]

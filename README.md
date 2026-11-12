@@ -53,6 +53,12 @@ Chụp sảnh 3D (`--bots=5` để xem đủ 6 người):
 godot --path . -- --bots=5 --menushot=screenshots/lobby.png
 ```
 
+Xem trọn hoạt ảnh rút một lá bài cụ thể (chỉ số lá theo `scripts/data/cards_data.gd`, thêm chỉ số thứ hai để xem cảnh chọn 1 trong 2):
+
+```bash
+godot --path . -- --carddemo=khi_van:15 --shot=screenshots
+```
+
 Chạy ván toàn bot ở tốc độ x4 và tự chụp 6 ảnh màn hình (`--autotest-human` để người chơi số 1 tự bấm nút):
 
 ```bash

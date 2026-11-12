@@ -10,6 +10,7 @@ Mọi tài nguyên trong game phải là **tự làm** hoặc có giấy phép *
 | Hiệu ứng mùa (hoa, lá, mưa, pháo hoa) | Hạt CPUParticles3D tự cấu hình | Của dự án |
 | 18 hiệu ứng âm thanh, 3 bản nhạc nền | Tự tổng hợp bằng tools/gen_audio.py (Karplus-Strong, sin, nhiễu) | Của dự án |
 | Sảnh 3D (sân khấu đình làng, đèn lồng, câu đối) | Tự dựng bằng code | Của dự án |
+| Hoạ tiết lá bài (trống đồng, đồng xu lỗ vuông, bông lúa), biểu tượng, nhân vật Chú Ba | Tự vẽ / tự dựng bằng code | Của dự án |
 | Font chữ | Font mặc định của Godot | MIT / OFL |
 | Nội dung thẻ Cơ Hội, nhân vật, luật chơi | Tự viết | Của dự án |
 
