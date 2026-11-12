@@ -113,12 +113,32 @@ Luật vẫn do engine quyết định; phần trình diễn chạy theo máy tr
 - Nút **Góc nhìn: Điện ảnh / Toàn cảnh** trong ván để tắt camera POV bất cứ lúc nào. Cài đặt "Camera điện ảnh khi đi": Tắt / Chỉ lượt của bạn / Mọi người chơi (mặc định). Lượt của máy trình diễn nhanh hơn ×1,7.
 
 ### 3.2. Đất & xây dựng
-- Dừng ở tỉnh chưa ai mua → mua hoặc bỏ qua (**không đấu giá** để ván nhanh hơn trên mobile).
+- Dừng ở tỉnh chưa ai mua → mua hoặc bỏ qua. **Bỏ qua thì ô được đem ra đấu giá** cho những người còn lại (xem 3.2b).
 - **Xây khi dừng lại đúng ô của mình** (không bắt buộc sở hữu cả nhóm như luật cổ điển → ván nhanh hơn).
 - 4 cấp: **Nhà cấp 4 → Nhà phố → Khách sạn → Danh Thắng**.
   - Danh Thắng chỉ xây được khi đã có Khách sạn và sở hữu ≥ 2 tỉnh trong nhóm.
   - Mỗi tỉnh có 1 mô hình danh thắng riêng (vd: Hà Nội – Hồ Gươm, Huế – Đại Nội, Quảng Ninh – Vịnh Hạ Long, Lâm Đồng – Hồ Xuân Hương…).
 - **Sở hữu trọn nhóm vùng**: tiền thuê ×2 cho cả nhóm.
+
+### 3.2b. Đấu giá
+
+- Kích hoạt khi người dừng ở ô chưa có chủ (tỉnh, hạ tầng, Trạm BOT) chọn **Bỏ qua**; người vừa bỏ qua không được tham gia. Ai không đủ tiền giá khởi điểm thì đứng ngoài.
+- Giá khởi điểm 50% giá niêm yết, bước giá 10% (làm tròn 5 xu). Lần lượt từng người còn trong cuộc: **trả +1 / +2 / +3 bước** hoặc **Bỏ**; không thể trả quá số xu đang có. Mỗi người trả tối đa 6 lần. Còn 1 người dẫn đầu → thắng, trả đúng giá chốt. Không ai trả giá khởi điểm → ô vẫn trống.
+- Người chơi thật có **9 giây** mỗi lượt (rút ngắn theo tốc độ, tối thiểu 4 giây), hết giờ coi như bỏ. Nếu bạn không tham gia, các máy đấu giá nhanh, kết quả ghi ở nhật ký và banner.
+- **Máy đấu giá theo tính cách** (`data/economy.tres`): giá trần = giá trị ước tính × hệ số tính cách × ngẫu nhiên ±10%. Giá trị ước tính xét giai đoạn ván (đầu ván đất quý hơn), số tỉnh đã có trong vùng, gom đủ vùng (×1,5), chặn đối thủ gom vùng (×1,2), hạ tầng đang có. Máy luôn giữ lại tiền an toàn (≥ 150 xu và 8% tổng tài sản, nhân hệ số tính cách).
+
+| Nhân vật | Tính cách | Giá trần | Ghi chú |
+|---|---|---|---|
+| Chú Năm Thợ Hồ | Liều | ×1,25 | Hay nhảy giá, giữ ít tiền |
+| Chị Bảy Doanh Nhân | Tham vọng | ×1,15 | |
+| Anh Út Nghệ Sĩ | Phô trương | ×1,05 | |
+| Anh Ba Xe Ôm | Lanh lẹ | ×1,0 | +30% với hạ tầng |
+| Ông Sáu Nông Dân | Gom đất | ×1,0 | +60% mỗi tỉnh đã có cùng vùng |
+| Cô Tư Tiểu Thương | Tính kỹ | ×0,95 | |
+| Bé Na Học Sinh | Bốc đồng | ×0,9 | Ngẫu nhiên ±20% |
+| Bác Hai Ngư Dân | Thủ thế | ×0,8 | Giữ tiền gấp rưỡi |
+
+Mô phỏng 600 ván: ~9 cuộc đấu giá mỗi ván, 98% được bán, giá chốt trung bình bằng giá niêm yết; Thợ Hồ thắng đấu giá nhiều nhất, Ngư Dân ít nhất; tỉ lệ thắng ván các nhân vật vẫn trong khoảng 18–23%.
 
 ### 3.3. Thâu tóm
 - Dừng ở đất đối thủ (sau khi trả tiền thuê) → được quyền mua lại với giá **1,5× tổng giá trị đã đầu tư**, chủ cũ buộc phải bán.

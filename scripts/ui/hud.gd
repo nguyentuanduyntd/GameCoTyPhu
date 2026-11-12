@@ -37,6 +37,7 @@ var roll_hint: Label
 var roll_btn: RollButton
 var roll_extras: HFlowContainer
 var banner: PanelContainer
+var auction_panel: AuctionPanel
 var banner_label: Label
 var _banner_tw: Tween
 var info_label: RichTextLabel
@@ -52,6 +53,9 @@ func setup(p_engine: GameEngine, p_colors: Array, p_human: int) -> void:
 	colors = p_colors
 	human_id = p_human
 	_build()
+	auction_panel = AuctionPanel.new()
+	root.add_child(auction_panel)
+	auction_panel.setup(engine, colors, human_id)
 
 
 func _build() -> void:
@@ -348,7 +352,7 @@ func pick_tile(t: int) -> void:
 
 func show_decision(pend: Dictionary) -> void:
 	clear_decision()
-	if ["draw_card", "card_reveal", "card_pick"].has(String(pend["type"])):
+	if ["draw_card", "card_reveal", "card_pick", "auction_bid"].has(String(pend["type"])):
 		return
 	waiting_label.text = ""
 	var p: Dictionary = engine.players[pend["p"]]

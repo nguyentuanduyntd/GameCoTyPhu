@@ -59,6 +59,7 @@ var _events: Array = []
 var _decks: Dictionary = {}
 var charity_pot: int = 0
 var blackout_round: int = -1
+var auction: Dictionary = {}   # trạng thái đấu giá đang diễn ra (xem AuctionRules)
 var _bonus_roll: bool = false
 var _group_tiles: Array = []
 
@@ -108,6 +109,7 @@ func setup(configs: Array, p_seed: int = 0, p_max_rounds: int = 25) -> Array:
 	_decks = {"khi_van": [], "co_hoi": []}
 	charity_pot = 0
 	blackout_round = -1
+	auction = {}
 	current = 0
 	round_num = 1
 	season = 0
@@ -369,6 +371,8 @@ func _apply(a: Dictionary) -> bool:
 	var p: Dictionary = players[current]
 	var kind: String = a.get("action", "")
 	var ptype: String = pending["type"]
+	if ptype == "auction_bid":
+		return AuctionRules.apply(self, pending["p"], a)
 	match ptype:
 		"turn":
 			return _act_turn(p, kind, a)
@@ -539,6 +543,7 @@ func _act_buy(p: Dictionary, kind: String, a: Dictionary) -> bool:
 	if kind == "pass":
 		pending = {}
 		_log("%s bỏ qua %s." % [p["name"], BoardData.plain_name(t)])
+		AuctionRules.start(self, t, p["id"])
 		return true
 	if kind != "buy":
 		return false

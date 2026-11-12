@@ -21,7 +21,8 @@ Màn đầu tiên là **sảnh 3D**: các nhân vật đứng thành hàng ngang
 
 ```
 scripts/core/     Luật chơi thuần logic (GameEngine) + bot (BotAI) — dùng lại cho server online
-scripts/data/     Dữ liệu bàn cờ, thẻ Cơ Hội, thẻ Kỹ Năng, nhân vật
+scripts/data/     Dữ liệu bàn cờ, thẻ, nhân vật; EconomyConfig (Resource hằng số cân bằng)
+data/economy.tres Hằng số đấu giá + tính cách AI — mở trong Godot Inspector để chỉnh
 scripts/game/     Bàn cờ 3D, bản đồ Việt Nam, nhân vật, danh thắng, xúc xắc, hiệu ứng mùa, camera
                   (game.gd nối engine với hình ảnh)
 scripts/ui/       Sảnh 3D, HUD trong ván, bảng cài đặt
@@ -64,6 +65,12 @@ Xem chậm một lượt của bạn (tốc độ x1, chụp 16 ảnh cách nhau
 
 ```bash
 godot --path . -- --autotest-human --speed=1 --shots=16 --every=0.55 --shot=screenshots
+```
+
+Xem panel đấu giá (Hà Nội được đem ra đấu giá ngay đầu ván, bạn tham gia):
+
+```bash
+godot --path . -- --auctiondemo --speed=1 --shots=8 --every=0.7 --shot=screenshots
 ```
 
 Chạy ván toàn bot ở tốc độ x4 và tự chụp 6 ảnh màn hình (`--autotest-human` để người chơi số 1 tự bấm nút):

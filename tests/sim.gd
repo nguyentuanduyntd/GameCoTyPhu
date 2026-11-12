@@ -19,6 +19,11 @@ func _init() -> void:
 	var bankrupt_total := 0
 	var errors := 0
 	var pot_total := 0
+	var auctions := 0
+	var auctions_sold := 0
+	var auction_ratio := 0.0
+	var auction_wins := {}
+	var auction_bids := {}
 	var t0 := Time.get_ticks_msec()
 	for g in games:
 		var e := GameEngine.new()
@@ -33,7 +38,24 @@ func _init() -> void:
 		while not e.game_over and steps < 20000:
 			var pend := e.pending
 			var a := BotAI.decide(e, pend)
+			var cash_before: Array = []
+			for pl in e.players:
+				cash_before.append(int(pl["cash"]))
 			var ev := e.act(pend["p"], a)
+			for x in ev:
+				if x["t"] == "auction_end":
+					auctions += 1
+					if int(x["winner"]) >= 0:
+						auctions_sold += 1
+						auction_ratio += float(x["price"]) / float(BoardData.tile(x["tile"])["price"])
+						var wc: String = e.players[x["winner"]]["character"]
+						auction_wins[wc] = auction_wins.get(wc, 0) + 1
+				elif x["t"] == "auction_bid":
+					var bc: String = e.players[x["p"]]["character"]
+					auction_bids[bc] = auction_bids.get(bc, 0) + 1
+					if int(x["price"]) > cash_before[x["p"]]:
+						errors += 1
+						printerr("Ván %d: trả giá vượt số tiền có" % g)
 			if ev.is_empty():
 				errors += 1
 				printerr("Hành động không hợp lệ ván %d: %s cho %s" % [g, a, pend])
@@ -57,6 +79,9 @@ func _init() -> void:
 	print("Lý do thắng: %s" % reasons)
 	print("Số vòng TB: %.1f | Hành động TB: %.0f | Phá sản TB/ván: %.2f" % [float(total_rounds) / games, float(total_actions) / games, float(bankrupt_total) / games])
 	print("Quỹ Từ Thiện cuối ván TB: %.0f" % (float(pot_total) / games))
+	print("Đấu giá: %d cuộc (%.1f/ván), bán được %.0f%%, giá chốt TB %.0f%% giá niêm yết" % [auctions, float(auctions) / games, 100.0 * auctions_sold / maxi(1, auctions), 100.0 * auction_ratio / maxi(1, auctions_sold)])
+	for ch in chars:
+		print("  %-12s thắng đấu giá %3d, số lần trả giá %4d" % [ch, auction_wins.get(ch, 0), auction_bids.get(ch, 0)])
 	print("Thắng theo độ khó (Dễ/Thường/Khó): %s" % [diff_wins])
 	for ch in chars:
 		print("  %-12s thắng %3d / %3d lượt tham gia (%.1f%%)" % [ch, char_wins.get(ch, 0), char_games.get(ch, 0), 100.0 * char_wins.get(ch, 0) / maxi(1, char_games.get(ch, 0))])

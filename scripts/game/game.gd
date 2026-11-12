@@ -35,6 +35,7 @@ enum TurnState {
 	CAMERA_FOLLOWING_PAWN, MOVING_PAWN, LANDING_ANIMATION, PROCESSING_TILE, CAMERA_RETURNING, TURN_COMPLETE,
 }
 var turn_state: int = TurnState.WAITING_FOR_TURN
+var _auction_fast := false   # người chơi thật không tham gia → các máy đấu giá nhanh, không mở panel
 var _turn_player := -1
 var cards_ui: CardOverlay
 const CARD_STEPS := ["draw_card", "card_reveal", "card_pick"]
@@ -43,7 +44,7 @@ var _shot_dir := ""
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase")
+	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo")
 	for a in args:
 		if a.begins_with("--carddemo="):
 			_autotest = true
@@ -94,6 +95,8 @@ func _ready() -> void:
 	hud.restart_requested.connect(func(): get_tree().reload_current_scene())
 	hud.speed_changed.connect(_on_speed_changed)
 	hud.cam_toggled.connect(_on_cam_toggled)
+	hud.auction_panel.bid.connect(func(k): _submit_auction({"action": "bid", "steps": k}))
+	hud.auction_panel.fold.connect(func(): _submit_auction({"action": "fold"}))
 	cinematic_on = Global.cinematic > 0
 	hud.set_cam_auto(cinematic_on)
 	Global.settings_changed.connect(_apply_settings)
@@ -125,6 +128,11 @@ func _ready() -> void:
 		if a.begins_with("--carddemo="):
 			_card_demo(a.substr(11))
 			return
+	if args.has("--auctiondemo"):
+		# Kiểm thử hình ảnh: Máy · An bỏ qua Hà Nội → đấu giá, người chơi tham gia
+		engine._events = []
+		AuctionRules.start(engine, BoardData.find_tile("Hà Nội"), 1)
+		events.append_array(engine._events)
 	_feed(events)
 
 
@@ -393,6 +401,40 @@ func _play(ev: Dictionary) -> void:
 			board.set_festival(ev["tile"])
 		"card":
 			pass
+		"auction_start":
+			var human_in: bool = (ev["bidders"] as Array).has(human_id) and not engine.players[human_id]["is_bot"]
+			_auction_fast = not human_in
+			hud.clear_decision()
+			hud.hide_roll()
+			Audio.play("auction_bid", 0.0, -2.0)
+			if _auction_fast:
+				hud.show_banner("Đấu giá %s giữa các máy..." % BoardData.plain_name(ev["tile"]), 1.2 / speed)
+			else:
+				hud.auction_panel.open(ev)
+				await get_tree().create_timer(0.35 / speed).timeout
+		"auction_bid":
+			Audio.play("auction_bid", 0.1, -4.0)
+			if hud.auction_panel.visible:
+				hud.auction_panel.on_bid(ev["p"], ev["price"])
+				await get_tree().create_timer((0.12 if _auction_fast else 0.25) / speed).timeout
+		"auction_fold":
+			if hud.auction_panel.visible:
+				hud.auction_panel.on_fold(ev["p"], ev["reason"])
+				await get_tree().create_timer((0.08 if _auction_fast else 0.2) / speed).timeout
+		"auction_end":
+			var w: int = ev["winner"]
+			if hud.auction_panel.visible:
+				hud.auction_panel.show_result(w, ev["price"])
+			if w >= 0:
+				Audio.play("auction_win")
+				tokens[w].cheer()
+				hud.show_banner("THẮNG ĐẤU GIÁ!  %s — %s · %s xu" % [engine.players[w]["name"], BoardData.plain_name(ev["tile"]), BoardData.money(ev["price"])], 1.6 / speed)
+			else:
+				hud.show_banner("Không ai mua %s — ô vẫn trống" % BoardData.plain_name(ev["tile"]), 1.2 / speed)
+			if hud.auction_panel.visible:
+				await get_tree().create_timer(1.0 / speed).timeout
+				hud.auction_panel.close()
+			_auction_fast = false
 		"card_drawn":
 			await cards_ui.play_draw(ev["cards"])
 		"duel":
@@ -465,6 +507,9 @@ func _after_queue() -> void:
 	if CARD_STEPS.has(String(pend["type"])):
 		await _card_step(pend, p)
 		return
+	if pend["type"] == "auction_bid":
+		await _auction_step(pend, p)
+		return
 	if pend["type"] == "turn":
 		_set_state(TurnState.WAITING_FOR_ROLL)
 		hud.set_focus(false)
@@ -484,6 +529,34 @@ func _after_queue() -> void:
 		if _autotest:
 			await get_tree().create_timer(0.6).timeout
 			hud.autotest_click()
+
+
+## Đấu giá: người chơi thật trả giá qua panel (có đồng hồ), máy "cân nhắc" một chút rồi quyết định.
+func _auction_step(pend: Dictionary, p: Dictionary) -> void:
+	hud.show_waiting("")
+	if not p["is_bot"]:
+		var cfg := EconomyConfig.get_default()
+		var secs := maxf(cfg.auction_human_min_seconds, cfg.auction_human_seconds / speed)
+		hud.auction_panel.prompt(pend, secs)
+		if _autotest and not OS.get_cmdline_user_args().has("--auctiondemo"):
+			await get_tree().create_timer(0.5).timeout
+			hud.auction_panel.autopress()
+		return
+	if hud.auction_panel.visible:
+		hud.auction_panel.on_thinking(pend["p"])
+	var delay := 0.08 if _auction_fast else randf_range(0.35, 0.9)
+	await get_tree().create_timer(delay / speed).timeout
+	if engine.pending != pend:
+		return
+	_feed(engine.act(pend["p"], BotAI.decide(engine, pend)))
+
+
+func _submit_auction(action: Dictionary) -> void:
+	if _busy or engine.pending.is_empty() or engine.pending["type"] != "auction_bid" or engine.pending["p"] != human_id:
+		return
+	var evs := engine.act(human_id, action)
+	if not evs.is_empty():
+		_feed(evs)
 
 
 ## Bộ bài Khí Vận / Cơ Hội: khoá lượt cho tới khi người chơi rút bài và bấm XÁC NHẬN.

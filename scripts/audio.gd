@@ -3,7 +3,9 @@ extends Node
 ## Toàn bộ file âm thanh được tổng hợp bằng tools/gen_audio.py.
 
 const SFX_NAMES := ["dice", "step", "coin", "pay", "buy", "build", "landmark", "card", "horn", "duel",
-	"bankrupt", "win", "click", "toll", "thunder", "firework", "turn", "takeover"]
+	"bankrupt", "win", "click", "toll", "thunder", "firework", "turn", "takeover",
+	# Đấu giá / mua đất (thiếu file thì tự bỏ qua, không báo lỗi)
+	"auction_bid", "auction_win", "buy_keng", "hammer"]
 const POOL_SIZE := 10
 
 var _sounds := {}

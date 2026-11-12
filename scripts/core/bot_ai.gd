@@ -95,6 +95,8 @@ static func decide(e: GameEngine, pend: Dictionary) -> Dictionary:
 			if opts.has("buy_specialty") and diff >= 1 and cash > 1000:
 				return {"action": "buy_specialty"}
 			return {"action": "pass"}
+		"auction_bid":
+			return AuctionRules.ai_decide(e, pend)
 		"draw_card":
 			return {"action": "draw"}
 		"card_reveal":

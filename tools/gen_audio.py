@@ -303,7 +303,36 @@ def gen_music():
     save("music_game_b", compose(33, oan, "bau", bpm=84, tonic=62, density=0.6, sad=True), 0.7)
 
 
+def gen_sfx_buying():
+    """Âm thanh đấu giá / mua đất (bộ sinh ngẫu nhiên riêng để không làm đổi các file cũ)."""
+    global rng
+    rng = np.random.default_rng(7788)
+    print("Đấu giá / mua đất:")
+    # Trả giá: gõ búa gỗ nhỏ + tiếng xu khẽ
+    t = t_axis(0.35)
+    coin = np.sin(2 * np.pi * 2349 * t) * np.exp(-t * 14)
+    save("auction_bid", add(mo(720, 0.12) * 1.2, 0.35 * coin))
+    # Thắng đấu giá: búa chốt giá + chuông ting ting + 2 nốt đàn tranh
+    t = t_axis(1.2)
+    bell = sum(np.sin(2 * np.pi * f * t) * np.exp(-t * d) for f, d in [(1760, 3.5), (2637, 4.5), (3520, 6)])
+    parts = [(0, trong(0.3, 260, 120) * 0.8), (0.0, mo(600, 0.12)), (0.12, bell * 0.6), (0.3, bell * 0.5),
+             (0.45, dan_tranh(midi(79), 1.0) * 0.7), (0.57, dan_tranh(midi(86), 1.0) * 0.7)]
+    save("auction_win", mix(int(1.7 * SR), parts))
+    # Mua đất: tiếng "keng" kim loại sáng
+    t = t_axis(1.0)
+    keng = sum(a * np.sin(2 * np.pi * f * t) * np.exp(-t * d) for f, a, d in [(1318, 1.0, 4), (1975, 0.6, 5), (3087, 0.35, 7), (4180, 0.2, 9)])
+    save("buy_keng", add(keng, mo(1600, 0.05) * 0.5))
+    # Xây dựng: búa gõ 2 nhịp
+    hit = add(trong(0.18, 380, 160) * 0.7, mo(1300, 0.07) * 0.6)
+    save("hammer", mix(int(0.55 * SR), [(0, hit), (0.2, hit * 1.1)]))
+
+
 if __name__ == "__main__":
+    import sys
+    if "--buying" in sys.argv:
+        gen_sfx_buying()
+        sys.exit(0)
     gen_sfx()
     gen_music()
+    gen_sfx_buying()
     print("Xong →", os.path.abspath(OUT))
