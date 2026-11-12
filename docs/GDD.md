@@ -144,6 +144,15 @@ Sau khi sở hữu ô tỉnh (mua thường hoặc thắng đấu giá) chủ ch
 - **Máy chọn loại** theo tính cách (`build_pref` trong `data/economy.tres`: Doanh Nhân thích Nhà hàng, Tiểu Thương thích Chợ, Nông Dân thích Xưởng, Ngư Dân thích Homestay…) và tình huống: còn nhiều vòng thì Homestay có lợi, ô ở đoạn đông người (sau Km 0, sau Kẹt Xe) thì Chợ / Nhà hàng có lợi.
 - Mô phỏng 600 ván: tỉ lệ xây Nhà hàng 42%, Homestay 29%, Chợ 17%, Xưởng 12%; loại chủ đạo của người thắng gần đúng tỉ lệ đó (không loại nào lấn át); tỉ lệ thắng các nhân vật 17–24%; ~1 người phá sản mỗi ván.
 
+### 3.2c. Hiệu ứng khoảnh khắc mua / xây
+
+- **Mua đất**: tiếng "keng", cờ chủ cắm xuống, **xu bay theo vòng cung** từ khung người chơi ra ô, **số tiền trong HUD chạy xuống** (đỏ khi giảm, xanh khi tăng), chữ "−X" nổi trên đầu nhân vật, **camera tiến nhẹ vào ô rồi lùi lại** (đang ở góc nhìn điện ảnh thì chỉ thu FOV, không đổi chế độ; bấm nhanh liên tục chỉ kéo dài thời gian giữ, không giật).
+- **Xây / nâng cấp**: công trình mọc lên có nảy vượt, bụi bay, rung màn hình rất nhẹ và tiếng búa lúc chạm đất; ít xu bay hơn, zoom ngắn hơn.
+- **Thắng đấu giá**: chuông + banner "THẮNG ĐẤU GIÁ! tên — tỉnh · giá", xu bay, pháo giấy, zoom.
+- **Danh Thắng / gom đủ cả vùng**: pháo giấy, pháo hoa, banner "… gom đủ vùng …! Tiền thuê cả vùng ×2".
+- Cài đặt **"Hiệu ứng mua đất: Tắt / Giảm / Bật"**: Giảm = ít xu, không zoom, pháo giấy chỉ khi Danh Thắng / gom vùng; Tắt = không xu, không zoom, không pháo giấy, tiền đổi ngay.
+- Mọi thời lượng chia theo tốc độ game; chuỗi hiệu ứng ~1,5–2,5 giây ở x1 và phần lớn chạy song song, không chặn lượt.
+
 ### 3.2b. Đấu giá
 
 - Kích hoạt khi người dừng ở ô chưa có chủ (tỉnh, hạ tầng, Trạm BOT) chọn **Bỏ qua**; người vừa bỏ qua không được tham gia. Ai không đủ tiền giá khởi điểm thì đứng ngoài.

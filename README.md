@@ -13,7 +13,7 @@ Màn đầu tiên là **sảnh 3D**: các nhân vật đứng thành hàng ngang
 Điều khiển trong ván:
 - Kéo chuột trái để xoay bàn cờ, lăn chuột để phóng to/thu nhỏ (trên điện thoại: vuốt và chụm 2 ngón).
 - Đến lượt bạn: bấm nút tròn **TUNG** ở giữa đáy màn hình. Xúc xắc tung trong mâm, rồi camera chuyển xuống góc nhìn thứ nhất bám theo quân cờ và quay về toàn cảnh khi hết lượt.
-- Nút **Góc nhìn: Điện ảnh / Toàn cảnh** bật/tắt camera bám quân cờ ngay trong ván. Trong Cài đặt có "Camera điện ảnh khi đi" (Tắt / Chỉ lượt của bạn / Mọi người chơi) và "Toàn cảnh tự xoay theo người đang đi".
+- Nút **Góc nhìn: Điện ảnh / Toàn cảnh** bật/tắt camera bám quân cờ ngay trong ván. Trong Cài đặt có "Camera điện ảnh khi đi" (Tắt / Chỉ lượt của bạn / Mọi người chơi), "Toàn cảnh tự xoay theo người đang đi" và "Hiệu ứng mua đất" (Tắt / Giảm / Bật).
 - Bấm vào một ô để xem thông tin: chủ, tiền thuê, đặc sản, danh thắng.
 - Khi cần chọn ô (Tàu Thống Nhất, Lễ Hội, Giải Tỏa, thẻ Cơ Hội), bấm thẳng vào ô trên bàn cờ hoặc chọn trong danh sách.
 
@@ -73,6 +73,14 @@ Xem panel đấu giá (Hà Nội được đem ra đấu giá ngay đầu ván, 
 ```bash
 godot --path . -- --auctiondemo --speed=1 --shots=8 --every=0.7 --shot=screenshots
 ```
+
+Xem hiệu ứng mua đất (mua → xây Nhà hàng → thắng đấu giá; ván tạm dừng):
+
+```bash
+godot --path . -- --juicedemo --shot=screenshots
+```
+
+Thử các mức hiệu ứng / camera: thêm `--buyfx=0|1|2`, `--cinematic=0|1|2`, `--speed=1|2|4` vào lệnh autotest.
 
 Xem panel chọn loại công trình (bạn vừa sở hữu Hà Nội):
 

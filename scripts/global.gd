@@ -20,6 +20,7 @@ var sfx_volume: float = 0.9
 var shadows: bool = true
 var weather_fx: bool = true
 var cam_auto: bool = true
+var buy_fx: int = 2      # hiệu ứng mua đất: 0 tắt, 1 giảm, 2 bật
 var cinematic: int = 2   # camera điện ảnh khi đi: 0 tắt, 1 chỉ lượt của bạn, 2 mọi người chơi
 
 
@@ -28,6 +29,10 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--bots="):
 			bot_count = clampi(int(arg.substr(7)), 3, 5)
+		if arg.begins_with("--buyfx="):
+			buy_fx = clampi(int(arg.substr(8)), 0, 2)
+		if arg.begins_with("--cinematic="):
+			cinematic = clampi(int(arg.substr(12)), 0, 2)
 	apply_settings()
 
 
@@ -47,6 +52,7 @@ func load_settings() -> void:
 	weather_fx = cf.get_value("graphics", "weather_fx", weather_fx)
 	cam_auto = cf.get_value("graphics", "cam_auto", cam_auto)
 	cinematic = cf.get_value("graphics", "cinematic", cinematic)
+	buy_fx = cf.get_value("graphics", "buy_fx", buy_fx)
 
 
 func save_settings() -> void:
@@ -63,6 +69,7 @@ func save_settings() -> void:
 	cf.set_value("graphics", "weather_fx", weather_fx)
 	cf.set_value("graphics", "cam_auto", cam_auto)
 	cf.set_value("graphics", "cinematic", cinematic)
+	cf.set_value("graphics", "buy_fx", buy_fx)
 	cf.save(SETTINGS_PATH)
 
 

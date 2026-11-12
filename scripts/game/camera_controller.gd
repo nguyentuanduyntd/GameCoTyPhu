@@ -7,7 +7,7 @@ extends Node3D
 ## Mọi chuyển động tính theo delta time: khi đổi chế độ, camera hoà trộn từ vị trí cũ sang mục tiêu mới bằng
 ## đường cong easing (sine in-out), sau đó bám mục tiêu bằng giảm chấn mũ — không giật, không phụ thuộc FPS.
 
-enum Mode { OVERVIEW, FOLLOW, FOCUS }
+enum Mode { OVERVIEW, FOLLOW, FOCUS, PUNCH }
 
 const OVERVIEW_FOV := 42.0
 const FOLLOW_FOV := 58.0
@@ -43,6 +43,11 @@ var _shake_t := 0.0
 var _yaw_target := 0.0
 var _fov_target := OVERVIEW_FOV
 
+# Zoom nhẹ khi mua đất ("punch"): toàn cảnh thì tiến gần ô một chút rồi lùi lại; đang điện ảnh thì chỉ thu FOV.
+const PUNCH_BLEND := 0.42
+var _punch_until := 0.0
+var _fov_punch := 0.0
+
 
 func setup(p_board: BoardView) -> void:
 	board = p_board
@@ -73,7 +78,10 @@ func _process(delta: float) -> void:
 		var k := 1.0 - exp(-_damp * delta)
 		_pos = _pos.lerp(want_pos, k)
 		_look = _look.lerp(want_look, k)
-	camera.fov = lerpf(camera.fov, _fov_target, 1.0 - exp(-3.0 * delta))
+	if mode == Mode.PUNCH and Time.get_ticks_msec() / 1000.0 >= _punch_until:
+		_switch(Mode.OVERVIEW, 0.9, OVERVIEW_FOV, 5.0)
+	_fov_punch = lerpf(_fov_punch, 0.0, 1.0 - exp(-3.5 * delta))
+	camera.fov = lerpf(camera.fov, _fov_target + _fov_punch, 1.0 - exp(-5.0 * delta))
 	# Rung nhẹ theo nhịp bước
 	var offset := Vector3.ZERO
 	if _shake > 0.0005:
@@ -84,6 +92,20 @@ func _process(delta: float) -> void:
 
 
 # ---------------------------------------------------------------- điều khiển chế độ
+
+## Zoom nhẹ vào ô t trong `hold` giây rồi tự trở lại. Gọi liên tục (bấm nhanh) chỉ kéo dài thời gian giữ,
+## không giật. Đang ở góc nhìn điện ảnh (POV/zoom ô) thì không đổi chế độ, chỉ "nhói" FOV một chút.
+func punch(t: int, hold: float) -> void:
+	_punch_until = Time.get_ticks_msec() / 1000.0 + hold
+	if mode == Mode.OVERVIEW:
+		_focus_tile = t
+		_fwd = _path_dir(t)
+		_switch(Mode.PUNCH, 0.45, OVERVIEW_FOV - 3.0, 4.0)
+	elif mode == Mode.PUNCH:
+		_focus_tile = t
+	else:
+		_fov_punch = -6.0
+
 
 func overview(duration: float = 1.1) -> void:
 	_switch(Mode.OVERVIEW, duration, OVERVIEW_FOV, 5.0)
@@ -172,15 +194,30 @@ func _desired() -> Array:
 				var cam := p - _fwd * follow_back + Vector3.UP * follow_height - side * 0.35
 				var look := p + _fwd * follow_ahead + Vector3.UP * 0.15
 				return [cam, look]
+		Mode.PUNCH:
+			if _focus_tile >= 0:
+				var ov := _overview_desired()
+				var fc := _focus_desired()
+				return [(ov[0] as Vector3).lerp(fc[0], PUNCH_BLEND), (ov[1] as Vector3).lerp(fc[1], PUNCH_BLEND * 1.3)]
 		Mode.FOCUS:
 			if _focus_tile >= 0:
 				var c := board.tile_center(_focus_tile)
 				var outward := (c * Vector3(1, 0, 1)).normalized()
 				var cam := c - _fwd * 1.6 + outward * 1.4 + Vector3.UP * 2.6
 				return [cam, c + Vector3.UP * 0.2]
+	return _overview_desired()
+
+
+func _overview_desired() -> Array:
 	var basis := Basis(Vector3.UP, yaw)
 	var cam_local := Vector3(0, dist * 0.88, dist * 0.47 + (look_z - 1.4))
 	return [basis * cam_local, basis * Vector3(0, 0, look_z)]
+
+
+func _focus_desired() -> Array:
+	var c := board.tile_center(_focus_tile)
+	var outward := (c * Vector3(1, 0, 1)).normalized()
+	return [c - _fwd * 1.6 + outward * 1.4 + Vector3.UP * 2.6, c + Vector3.UP * 0.2]
 
 
 ## Hướng đi của bàn cờ tại ô t (từ ô t sang ô kế tiếp).

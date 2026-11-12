@@ -35,6 +35,9 @@ enum TurnState {
 	CAMERA_FOLLOWING_PAWN, MOVING_PAWN, LANDING_ANIMATION, PROCESSING_TILE, CAMERA_RETURNING, TURN_COMPLETE,
 }
 var turn_state: int = TurnState.WAITING_FOR_TURN
+var juice: BuyJuice
+var _in_auction := false
+var _groups_done := {}
 var _auction_fast := false   # người chơi thật không tham gia → các máy đấu giá nhanh, không mở panel
 var _turn_player := -1
 var cards_ui: CardOverlay
@@ -44,7 +47,7 @@ var _shot_dir := ""
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo") or args.has("--pickerdemo")
+	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo") or args.has("--pickerdemo") or args.has("--juicedemo")
 	for a in args:
 		if a.begins_with("--carddemo="):
 			_autotest = true
@@ -69,7 +72,7 @@ func _ready() -> void:
 	board.building_landed.connect(_on_building_landed)
 
 	engine = GameEngine.new()
-	var cfg := Global.make_player_configs(args.has("--autotest") or args.has("--showcase") or args.has("--typeshow") or args.has("--builddemo"))
+	var cfg := Global.make_player_configs(args.has("--autotest") or args.has("--showcase") or args.has("--typeshow") or args.has("--builddemo") or args.has("--juicedemo"))
 	for i in cfg.size():
 		var tok := Character3D.new().setup(cfg[i]["character"], Color(PLAYER_COLORS[i]))
 		add_child(tok)
@@ -80,6 +83,10 @@ func _ready() -> void:
 	add_child(hud)
 	dice_tray = DiceTray.new()
 	add_child(dice_tray)
+	juice = BuyJuice.new()
+	add_child(juice)
+	juice.setup(board, cam_ctl, hud)
+	juice.speed = speed
 	dice_tray.settled.connect(func():
 		if turn_state == TurnState.ROLLING_DICE:
 			_set_state(TurnState.SHOWING_DICE_RESULT))
@@ -140,6 +147,9 @@ func _ready() -> void:
 		return
 	if args.has("--builddemo"):
 		_build_demo()
+		return
+	if args.has("--juicedemo"):
+		_juice_demo()
 		return
 	for a in args:
 		if a.begins_with("--carddemo="):
@@ -392,7 +402,7 @@ func _play(ev: Dictionary) -> void:
 				Audio.play("thunder")
 			hud.set_season(ev["season"], ev["event"])
 		"cash":
-			hud.set_cash(ev["p"], ev["cash"])
+			hud.set_cash(ev["p"], ev["cash"], true, 0.6 / speed)
 			Audio.play("coin" if int(ev["delta"]) > 0 else "pay", 0.05, -4.0)
 			var d: int = ev["delta"]
 			_float_text(ev["p"], ("+" if d > 0 else "") + BoardData.money(d), Color("#76ff03") if d > 0 else Color("#ff5252"))
@@ -417,10 +427,17 @@ func _play(ev: Dictionary) -> void:
 			var t_ev: int = ev["tile"]
 			var grew: bool = ev["owner"] >= 0 and (ev["level"] > board._shown_level[t_ev] or ev["owner"] != board._shown_owner[t_ev])
 			var new_owner: bool = ev["owner"] >= 0 and ev["owner"] != board._shown_owner[t_ev]
+			var leveled_up: bool = ev["owner"] >= 0 and not new_owner and ev["level"] > board._shown_level[t_ev]
 			board.anim_speed = speed
+			juice.speed = speed
 			board.set_tile_state(t_ev, ev["owner"], ev["level"], true, String(ev.get("kind", "")))
 			if new_owner:
 				Audio.play("buy_keng", 0.05, -2.0)
+				if not _in_auction:
+					juice.purchase(ev["owner"], t_ev)
+			elif leveled_up and ev["level"] < GameEngine.LANDMARK:
+				juice.build(ev["owner"], t_ev)
+			_check_group(t_ev, ev["owner"])
 			if ev["owner"] >= 0 and ev["owner"] == engine.current:
 				tokens[ev["owner"]].cheer()
 			# chờ công trình mọc xong rồi mới sang sự kiện tiếp theo
@@ -447,6 +464,7 @@ func _play(ev: Dictionary) -> void:
 				"workshop":
 					_float_text(ev["p"], "+%d đặc sản" % int(ev["amount"]), Color("#81c784"))
 		"auction_start":
+			_in_auction = true
 			var human_in: bool = (ev["bidders"] as Array).has(human_id) and not engine.players[human_id]["is_bot"]
 			_auction_fast = not human_in
 			hud.clear_decision()
@@ -470,9 +488,11 @@ func _play(ev: Dictionary) -> void:
 			var w: int = ev["winner"]
 			if hud.auction_panel.visible:
 				hud.auction_panel.show_result(w, ev["price"])
+			_in_auction = false
 			if w >= 0:
 				Audio.play("auction_win")
 				tokens[w].cheer()
+				juice.auction_win(w, ev["tile"])
 				hud.show_banner("THẮNG ĐẤU GIÁ!  %s — %s · %s xu" % [engine.players[w]["name"], BoardData.plain_name(ev["tile"]), BoardData.money(ev["price"])], 1.6 / speed)
 			else:
 				hud.show_banner("Không ai mua %s — ô vẫn trống" % BoardData.plain_name(ev["tile"]), 1.2 / speed)
@@ -510,6 +530,7 @@ func _play(ev: Dictionary) -> void:
 			Audio.play("landmark")
 			Audio.play("firework", 0.1, -3.0)
 			season_fx.fireworks()
+			juice.celebrate(ev["tile"])
 			await hud.show_toast("DANH THẮNG\n%s" % BoardData.tile(ev["tile"])["landmark"], 1.3 / speed)
 		"takeover":
 			Audio.play("takeover")
@@ -707,6 +728,45 @@ func _build_demo() -> void:
 	get_tree().quit()
 
 
+## Kiểm thử hiệu ứng mua đất: mua Cao Bằng → xây Nhà hàng → thắng đấu giá Lạng Sơn, chụp từng pha.
+func _juice_demo() -> void:
+	speed = 1.0
+	juice.speed = 1.0
+	engine.pending = {}   # dừng ván: chỉ diễn hiệu ứng, máy không chơi tiếp
+	await get_tree().create_timer(1.0).timeout
+	var t := BoardData.find_tile("Cao Bằng")
+	engine._events = []
+	engine._pay(engine.players[human_id], 100, -1, "Mua đất")
+	engine._set_tile(t, human_id, 0)
+	_feed(engine._events.duplicate())
+	await get_tree().create_timer(0.3).timeout
+	_demo_shot("juice_1_coins")
+	await get_tree().create_timer(0.35).timeout
+	_demo_shot("juice_2_punch")
+	await get_tree().create_timer(1.6).timeout
+	engine._events = []
+	engine._pay(engine.players[human_id], 60, -1, "Xây Nhà hàng")
+	engine.btype[t] = "restaurant"
+	engine._set_tile(t, human_id, 1)
+	engine._push({"t": "building", "p": human_id, "tile": t, "type": "restaurant", "level": 1})
+	_feed(engine._events.duplicate())
+	await get_tree().create_timer(0.45).timeout
+	_demo_shot("juice_3_build")
+	await get_tree().create_timer(1.8).timeout
+	var t2 := BoardData.find_tile("Lạng Sơn")
+	engine._events = []
+	engine._pay(engine.players[human_id], 70, -1, "Thắng đấu giá")
+	engine._set_tile(t2, human_id, 0)
+	engine._push({"t": "auction_end", "tile": t2, "winner": human_id, "price": 70})
+	_in_auction = true
+	_feed(engine._events.duplicate())
+	await get_tree().create_timer(0.5).timeout
+	_demo_shot("juice_4_auction")
+	await get_tree().create_timer(2.0).timeout
+	_demo_shot("juice_5_after")
+	get_tree().quit()
+
+
 func _demo_shot(name: String) -> void:
 	if _shot_dir == "":
 		return
@@ -786,6 +846,23 @@ func _finish_turn_presentation(next_pid: int) -> void:
 		hud.show_banner("Được tung tiếp!" if next_pid == _turn_player else "Hoàn thành lượt!", 1.0 / speed)
 
 
+## Gom đủ cả vùng: pháo giấy + banner (mỗi lần gom đủ chỉ báo một lần; mất vùng rồi gom lại thì báo lại).
+func _check_group(t: int, owner_id: int) -> void:
+	if not BoardData.is_province(t):
+		return
+	var g: int = BoardData.tile(t)["group"]
+	for pid in engine.players.size():
+		var key := "%d|%d" % [pid, g]
+		var has_all := engine.owns_group(pid, g)
+		if has_all and not _groups_done.has(key) and pid == owner_id:
+			_groups_done[key] = true
+			juice.celebrate(t)
+			Audio.play("auction_win", 0.0, -3.0)
+			hud.show_banner("%s gom đủ vùng %s! Tiền thuê cả vùng ×2" % [engine.players[pid]["name"], BoardData.GROUPS[g]["name"]], 1.6 / speed)
+		elif not has_all:
+			_groups_done.erase(key)
+
+
 func _on_building_landed(_t: int, strength: float) -> void:
 	if strength >= 0.5:
 		Audio.play("hammer", 0.1, -3.0 if strength >= 0.9 else -7.0)
@@ -794,6 +871,7 @@ func _on_building_landed(_t: int, strength: float) -> void:
 
 func _on_speed_changed(s: float) -> void:
 	speed = s
+	juice.speed = s
 	Global.speed = s
 
 

@@ -15,6 +15,8 @@ var human_id: int = 0
 
 var root: Control
 var player_boxes: Array = []
+var _shown_cash := {}
+var _cash_tw := {}
 var round_label: Label
 var log_box: RichTextLabel
 var decision_panel: PanelContainer
@@ -235,8 +237,22 @@ func _set_cash_label(lbl: Label, cash: int) -> void:
 	lbl.text = BoardData.money(cash) + " xu"
 
 
-func set_cash(pid: int, cash: int) -> void:
-	_set_cash_label(player_boxes[pid]["cash"], cash)
+## Cập nhật tiền: chạy số mượt (lên xanh, xuống đỏ) thay vì đổi cái rụp. Tắt hiệu ứng mua đất thì đổi ngay.
+func set_cash(pid: int, cash: int, animate: bool = false, duration: float = 0.6) -> void:
+	var lbl: Label = player_boxes[pid]["cash"]
+	var from: int = _shown_cash.get(pid, cash)
+	_shown_cash[pid] = cash
+	if _cash_tw.has(pid) and (_cash_tw[pid] as Tween).is_valid():
+		(_cash_tw[pid] as Tween).kill()
+	if not animate or Global.buy_fx == 0 or from == cash:
+		_set_cash_label(lbl, cash)
+		lbl.modulate = Color.WHITE
+		return
+	var tw := create_tween()
+	_cash_tw[pid] = tw
+	lbl.modulate = Color("#ff8a80") if cash < from else Color("#b9f6ca")
+	tw.tween_method(func(v: float): _set_cash_label(lbl, int(round(v))), float(from), float(cash), maxf(duration, 0.1)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate", Color.WHITE, 0.25)
 
 
 func set_current(pid: int) -> void:
@@ -250,7 +266,8 @@ func set_current(pid: int) -> void:
 func refresh_players() -> void:
 	for p in engine.players:
 		var box: Dictionary = player_boxes[p["id"]]
-		_set_cash_label(box["cash"], p["cash"])
+		if int(_shown_cash.get(p["id"], -1)) != int(p["cash"]):
+			set_cash(p["id"], p["cash"])
 		var parts: Array = []
 		if not p["alive"]:
 			parts.append("ĐÃ PHÁ SẢN")
@@ -619,6 +636,10 @@ func _tile_desc(t: int) -> String:
 	var td := BoardData.tile(t)
 	if td["type"] == BoardData.T.INFRA:
 		return "Hạ tầng. Tiền thuê tăng theo số hạ tầng sở hữu: 50 / 100 / 200 / 400."
+	if td["type"] == BoardData.T.TOLL:
+		return "Trạm BOT: ai đi ngang qua trả %d xu cho chủ, dừng đúng trạm trả %d xu." % [GameEngine.TOLL_FEE, GameEngine.TOLL_FEE * GameEngine.TOLL_LAND_MULT]
+	if not td.has("group"):
+		return ""
 	var g: Dictionary = BoardData.GROUPS[td["group"]]
 	var base := _round5(td["price"] * EconomyConfig.get_default().rent_mult[0])
 	return "Vùng %s (%s, %d tỉnh). Thuê cơ bản %s. Đặc sản: %s. Danh thắng: %s." % [

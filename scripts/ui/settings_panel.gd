@@ -17,8 +17,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_CENTER)
 	offset_left = -230
 	offset_right = 230
-	offset_top = -230
-	offset_bottom = 230
+	offset_top = -255
+	offset_bottom = 255
 	grow_horizontal = Control.GROW_DIRECTION_BOTH
 	grow_vertical = Control.GROW_DIRECTION_BOTH
 
@@ -75,6 +75,19 @@ func _ready() -> void:
 		_commit())
 	cine_row.add_child(cine)
 	v.add_child(cine_row)
+
+	var fx_row := HBoxContainer.new()
+	fx_row.add_child(_label("Hiệu ứng mua đất"))
+	var fx := OptionButton.new()
+	for t in ["Tắt", "Giảm", "Bật"]:
+		fx.add_item(t)
+	fx.select(clampi(Global.buy_fx, 0, 2))
+	fx.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fx.item_selected.connect(func(i):
+		Global.buy_fx = i
+		_commit())
+	fx_row.add_child(fx)
+	v.add_child(fx_row)
 
 	var close := Button.new()
 	close.text = "Đóng"
