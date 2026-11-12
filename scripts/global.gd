@@ -20,6 +20,7 @@ var sfx_volume: float = 0.9
 var shadows: bool = true
 var weather_fx: bool = true
 var cam_auto: bool = true
+var cinematic: int = 2   # camera điện ảnh khi đi: 0 tắt, 1 chỉ lượt của bạn, 2 mọi người chơi
 
 
 func _ready() -> void:
@@ -45,6 +46,7 @@ func load_settings() -> void:
 	shadows = cf.get_value("graphics", "shadows", shadows)
 	weather_fx = cf.get_value("graphics", "weather_fx", weather_fx)
 	cam_auto = cf.get_value("graphics", "cam_auto", cam_auto)
+	cinematic = cf.get_value("graphics", "cinematic", cinematic)
 
 
 func save_settings() -> void:
@@ -60,6 +62,7 @@ func save_settings() -> void:
 	cf.set_value("graphics", "shadows", shadows)
 	cf.set_value("graphics", "weather_fx", weather_fx)
 	cf.set_value("graphics", "cam_auto", cam_auto)
+	cf.set_value("graphics", "cinematic", cinematic)
 	cf.save(SETTINGS_PATH)
 
 

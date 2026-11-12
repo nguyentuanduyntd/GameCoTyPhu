@@ -17,8 +17,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_CENTER)
 	offset_left = -230
 	offset_right = 230
-	offset_top = -200
-	offset_bottom = 200
+	offset_top = -230
+	offset_bottom = 230
 	grow_horizontal = Control.GROW_DIRECTION_BOTH
 	grow_vertical = Control.GROW_DIRECTION_BOTH
 
@@ -59,9 +59,22 @@ func _ready() -> void:
 	v.add_child(_check("Hiệu ứng thời tiết (hoa, lá, mưa)", Global.weather_fx, func(on):
 		Global.weather_fx = on
 		_commit()))
-	v.add_child(_check("Camera tự xoay theo lượt", Global.cam_auto, func(on):
+	v.add_child(_check("Toàn cảnh tự xoay theo người đang đi", Global.cam_auto, func(on):
 		Global.cam_auto = on
 		_commit()))
+
+	var cine_row := HBoxContainer.new()
+	cine_row.add_child(_label("Camera điện ảnh khi đi"))
+	var cine := OptionButton.new()
+	for t in ["Tắt", "Chỉ lượt của bạn", "Mọi người chơi"]:
+		cine.add_item(t)
+	cine.select(clampi(Global.cinematic, 0, 2))
+	cine.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cine.item_selected.connect(func(i):
+		Global.cinematic = i
+		_commit())
+	cine_row.add_child(cine)
+	v.add_child(cine_row)
 
 	var close := Button.new()
 	close.text = "Đóng"

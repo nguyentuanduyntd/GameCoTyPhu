@@ -9,6 +9,12 @@ const HAIR := "#2b1d16"
 var character_id: String = ""
 var player_color: Color = Color.WHITE
 var body_root: Node3D
+var legs: Array = []
+var arms: Array = []
+var walking := false
+var _walk_k := 0.0
+var _jump_y := 0.0
+var _tilt := 0.0
 var _t := 0.0
 var _phase := 0.0
 var _mats := {}
@@ -24,25 +30,49 @@ func setup(id: String, col: Color) -> Character3D:
 
 func _process(delta: float) -> void:
 	_t += delta
-	if body_root:
-		body_root.position.y = absf(sin(_t * 2.6 + _phase)) * 0.025
+	if body_root == null:
+		return
+	# Hoà dần giữa đứng yên và bước đi (theo delta time)
+	_walk_k = lerpf(_walk_k, 1.0 if walking else 0.0, 1.0 - exp(-10.0 * delta))
+	var swing := sin(_t * 15.0) * 0.75 * _walk_k
+	for i in legs.size():
+		(legs[i] as Node3D).rotation.x = swing * (1.0 if i == 0 else -1.0)
+	for i in arms.size():
+		(arms[i] as Node3D).rotation.x = -swing * 0.8 * (1.0 if i == 0 else -1.0)
+	var idle := absf(sin(_t * 2.6 + _phase)) * 0.025
+	var step_bob := absf(sin(_t * 15.0)) * 0.04
+	body_root.position.y = lerpf(idle, step_bob, _walk_k) + _jump_y
+	body_root.rotation.x = lerpf(body_root.rotation.x, 0.12 * _walk_k + _tilt, 1.0 - exp(-12.0 * delta))
+
+
+func set_walking(on: bool) -> void:
+	walking = on
+
+
+## Đáp xuống ô: nhún xuống rồi bật lại nhẹ.
+func land() -> void:
+	walking = false
+	var tw := create_tween()
+	tw.tween_property(body_root, "scale", Vector3(1.12, 0.82, 1.12), 0.07)
+	tw.tween_property(body_root, "scale", Vector3(0.96, 1.06, 0.96), 0.1)
+	tw.tween_property(body_root, "scale", Vector3.ONE, 0.12)
 
 
 ## Nhảy mừng (khi mua đất, thắng đụng độ...)
 func cheer() -> void:
 	var tw := create_tween()
-	tw.tween_property(body_root, "position:y", 0.35, 0.15).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "_jump_y", 0.35, 0.15).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(body_root, "rotation:y", TAU, 0.3)
-	tw.tween_property(body_root, "position:y", 0.0, 0.15).set_ease(Tween.EASE_IN)
+	tw.tween_property(self, "_jump_y", 0.0, 0.15).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func(): body_root.rotation.y = 0.0)
 
 
 ## Gục đầu buồn (khi phá sản, trả tiền lớn)
 func sad() -> void:
 	var tw := create_tween()
-	tw.tween_property(body_root, "rotation:x", 0.35, 0.2)
+	tw.tween_property(self, "_tilt", 0.35, 0.2)
 	tw.tween_interval(0.5)
-	tw.tween_property(body_root, "rotation:x", 0.0, 0.25)
+	tw.tween_property(self, "_tilt", 0.0, 0.25)
 
 
 # ---------------------------------------------------------------- dựng hình
@@ -61,9 +91,13 @@ func _build() -> void:
 	var outfit := _outfit()
 	# Chân
 	for sx in [-1, 1]:
+		var hip := Node3D.new()
+		hip.position = Vector3(sx * 0.06, 0.27, 0)
+		body_root.add_child(hip)
 		var leg := _capsule(0.05, 0.22, outfit["pants"])
-		leg.position = Vector3(sx * 0.06, 0.16, 0)
-		body_root.add_child(leg)
+		leg.position = Vector3(0, -0.11, 0)
+		hip.add_child(leg)
+		legs.append(hip)
 	# Thân
 	if outfit.get("long", false):
 		var tunic := _cyl(0.1, 0.16, 0.34, outfit["shirt"])
@@ -75,13 +109,17 @@ func _build() -> void:
 		body_root.add_child(torso)
 	# Tay
 	for sx in [-1, 1]:
+		var shoulder := Node3D.new()
+		shoulder.position = Vector3(sx * 0.13, 0.51, 0)
+		shoulder.rotation.z = sx * 0.25
+		body_root.add_child(shoulder)
 		var arm := _capsule(0.04, 0.2, outfit["shirt"])
-		arm.position = Vector3(sx * 0.15, 0.42, 0)
-		arm.rotation.z = sx * 0.25
-		body_root.add_child(arm)
+		arm.position = Vector3(0, -0.09, 0)
+		shoulder.add_child(arm)
 		var hand := _sphere(0.04, SKIN)
-		hand.position = Vector3(sx * 0.18, 0.32, 0)
-		body_root.add_child(hand)
+		hand.position = Vector3(0, -0.19, 0)
+		shoulder.add_child(hand)
+		arms.append(shoulder)
 	# Đầu
 	var head := _sphere(0.15, SKIN)
 	head.position.y = 0.68

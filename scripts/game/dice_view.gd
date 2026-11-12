@@ -23,10 +23,19 @@ var rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	rng.randomize()
 	for i in 2:
-		var d := _make_die()
+		var d := make_die()
 		d.position = REST + Vector3(-0.5 + i * 1.0, SIZE / 2 + 0.08, 0)
 		add_child(d)
 		dice.append(d)
+
+
+## Đặt ngay mặt xúc xắc trên bàn theo kết quả (không hoạt ảnh) — mâm xúc xắc mới lo phần tung.
+func show_values(values: Array) -> void:
+	dice[1].visible = values.size() > 1
+	for i in values.size():
+		var d: Node3D = dice[i]
+		d.position = REST + Vector3(0.0 if values.size() == 1 else -0.55 + i * 1.1, SIZE / 2 + 0.08, 0)
+		d.rotation = face_up_basis(int(values[i]), rng.randf_range(-0.4, 0.4)).get_euler()
 
 
 func roll(values: Array, speed: float = 1.0) -> void:
@@ -39,7 +48,7 @@ func roll(values: Array, speed: float = 1.0) -> void:
 		var x := 0.0 if count == 1 else -0.55 + i * 1.1
 		var target := REST + Vector3(x + rng.randf_range(-0.15, 0.15), SIZE / 2 + 0.08, rng.randf_range(-0.2, 0.2))
 		d.position = target + Vector3(rng.randf_range(-1.5, 1.5), 3.5, 2.0)
-		var final_rot := _face_up_basis(int(values[i]), rng.randf() * TAU).get_euler()
+		var final_rot := face_up_basis(int(values[i]), rng.randf() * TAU).get_euler()
 		var spin := Vector3(TAU * rng.randi_range(2, 3), TAU * rng.randi_range(1, 2), TAU * rng.randi_range(2, 3))
 		d.rotation = final_rot + spin
 		tw.tween_property(d, "position", target, dur).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
@@ -48,7 +57,7 @@ func roll(values: Array, speed: float = 1.0) -> void:
 	await get_tree().create_timer(0.25 / speed).timeout
 
 
-func _face_up_basis(v: int, yaw: float) -> Basis:
+static func face_up_basis(v: int, yaw: float) -> Basis:
 	var b := Basis.IDENTITY
 	match v:
 		6:
@@ -64,15 +73,17 @@ func _face_up_basis(v: int, yaw: float) -> Basis:
 	return Basis(Vector3.UP, yaw) * b
 
 
-func _make_die() -> Node3D:
+## Xúc xắc dùng chung (bàn cờ và mâm xúc xắc). Chấm 1 và 4 màu đỏ như xúc xắc truyền thống.
+static func make_die(size: float = SIZE) -> Node3D:
 	var root := Node3D.new()
 	var body := MeshInstance3D.new()
 	var bm := BoxMesh.new()
-	bm.size = Vector3.ONE * SIZE
+	bm.size = Vector3.ONE * size
 	body.mesh = bm
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color("#fffdf7")
-	mat.roughness = 0.4
+	mat.roughness = 0.22
+	mat.metallic_specular = 0.8
 	body.material_override = mat
 	root.add_child(body)
 	var black := StandardMaterial3D.new()
@@ -80,8 +91,8 @@ func _make_die() -> Node3D:
 	var red := StandardMaterial3D.new()
 	red.albedo_color = Color("#d32f2f")
 	var pip_mesh := SphereMesh.new()
-	pip_mesh.radius = 0.065
-	pip_mesh.height = 0.13
+	pip_mesh.radius = 0.065 * size / SIZE
+	pip_mesh.height = 0.13 * size / SIZE
 	for v in FACE_NORMALS.keys():
 		var n: Vector3 = FACE_NORMALS[v]
 		var u: Vector3
@@ -99,7 +110,7 @@ func _make_die() -> Node3D:
 			var pip := MeshInstance3D.new()
 			pip.mesh = pip_mesh
 			pip.material_override = red if (v == 1 or v == 4) else black
-			pip.position = n * (SIZE / 2 - 0.004) + u * pp.x * 0.15 + w * pp.y * 0.15
+			pip.position = n * (size / 2 - 0.004 * size / SIZE) + (u * pp.x + w * pp.y) * 0.15 * size / SIZE
 			pip.scale = Vector3.ONE - n.abs() * 0.7
 			root.add_child(pip)
 	return root

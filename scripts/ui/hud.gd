@@ -30,6 +30,15 @@ var over_panel: PanelContainer
 var speed_btn: Button
 var cam_btn: Button
 var info_panel: PanelContainer
+var log_panel: PanelContainer
+var roll_area: VBoxContainer
+var roll_title: Label
+var roll_hint: Label
+var roll_btn: RollButton
+var roll_extras: HFlowContainer
+var banner: PanelContainer
+var banner_label: Label
+var _banner_tw: Tween
 var info_label: RichTextLabel
 
 var _pick_callback: Callable = Callable()
@@ -84,14 +93,14 @@ func _build() -> void:
 	right.add_child(row)
 	speed_btn = _button("Tốc độ x1", _on_speed)
 	row.add_child(speed_btn)
-	cam_btn = _button("Camera: Tự động", func():
-		var on := cam_btn.text.ends_with("Tự do")
+	cam_btn = _button("Góc nhìn: Điện ảnh", func():
+		var on := cam_btn.text.ends_with("Toàn cảnh")
 		set_cam_auto(on)
 		cam_toggled.emit(on))
 	row.add_child(cam_btn)
 	row.add_child(_button("Cài đặt", func(): add_child(SettingsPanel.new())))
 	row.add_child(_button("Menu", func(): menu_requested.emit()))
-	var log_panel := PanelContainer.new()
+	log_panel = PanelContainer.new()
 	log_panel.add_theme_stylebox_override("panel", _style(Color(0, 0, 0, 0.5), 10))
 	right.add_child(log_panel)
 	log_box = RichTextLabel.new()
@@ -137,6 +146,8 @@ func _build() -> void:
 	dv.add_child(decision_buttons)
 	decision_panel.visible = false
 
+	_build_roll_area()
+	_build_banner()
 	waiting_label = Label.new()
 	_anchor(waiting_label, Control.PRESET_CENTER_BOTTOM, -300, -60, 300, -24)
 	waiting_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -303,6 +314,8 @@ func show_waiting(text: String) -> void:
 
 func clear_decision() -> void:
 	decision_panel.visible = false
+	if roll_area and roll_btn.state == RollButton.State.ACTIVE:
+		roll_area.visible = false
 	tile_scroll.visible = false
 	_pick_callback = Callable()
 	pick_mode.emit([])
@@ -314,6 +327,9 @@ func clear_decision() -> void:
 
 ## Dùng cho kiểm thử tự động: bấm nút ô đầu tiên hoặc nút quyết định đầu tiên.
 func autotest_click() -> void:
+	if roll_area.visible and roll_btn.is_ready():
+		roll_btn.press()
+		return
 	if not decision_panel.visible:
 		return
 	if tile_scroll.visible and tile_grid.get_child_count() > 0:
@@ -340,17 +356,8 @@ func show_decision(pend: Dictionary) -> void:
 	decision_desc.text = ""
 	match String(pend["type"]):
 		"turn":
-			decision_title.text = "Lượt của bạn"
-			decision_desc.text = "Đang ở: %s" % BoardData.plain_name(p["pos"])
-			_add_btn("TUNG XÚC XẮC", {"action": "roll"}, true)
-			if p["cards"].has("XUC_XAC_VANG"):
-				decision_buttons.add_child(_button("Xúc Xắc Vàng", _show_golden))
-			if p["cards"].has("GIAI_TOA") and engine.giai_toa_targets(p["id"]).size() > 0:
-				decision_buttons.add_child(_button("Giải Tỏa", _show_giai_toa))
-			if engine.can_exchange(p["id"], "rare"):
-				_add_btn("Đổi đặc sản 3 miền → thẻ hiếm", {"action": "exchange", "kind": "rare"})
-			if engine.can_exchange(p["id"], "common"):
-				_add_btn("Đổi 3 đặc sản cùng miền → thẻ", {"action": "exchange", "kind": "common"})
+			decision_panel.visible = false
+			show_roll(p)
 		"jail":
 			decision_title.text = "Bạn đang Kẹt Xe"
 			decision_desc.text = "Tung trượt %d/%d lần (đủ %d lần thì CSGT phân luồng, tự thoát). Tung đôi để thoát, gọi xe ôm, hoặc liều đi đường tắt." % [pend["tries"], pend["max_tries"], pend["max_tries"]]
@@ -431,6 +438,162 @@ func show_decision(pend: Dictionary) -> void:
 			decision_desc.text = String(pend["text"]) + " Bấm ô trên bàn cờ hoặc chọn trong danh sách."
 			_show_tile_picker(pend["options"], func(t): _emit({"action": "pick_tile", "tile": t}))
 			_add_btn("Bỏ qua", {"action": "pass"})
+
+
+# ---------------------------------------------------------------- nút TUNG
+
+func _build_roll_area() -> void:
+	roll_area = VBoxContainer.new()
+	roll_area.alignment = BoxContainer.ALIGNMENT_END
+	roll_area.add_theme_constant_override("separation", 0)
+	_anchor(roll_area, Control.PRESET_CENTER_BOTTOM, -260, -330, 260, -6)
+	roll_area.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	roll_area.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(roll_area)
+	roll_extras = HFlowContainer.new()
+	roll_extras.alignment = FlowContainer.ALIGNMENT_CENTER
+	roll_extras.add_theme_constant_override("h_separation", 8)
+	roll_area.add_child(roll_extras)
+	roll_title = Label.new()
+	roll_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	roll_title.add_theme_font_size_override("font_size", 34)
+	roll_title.add_theme_color_override("font_color", Color("#ffd54f"))
+	roll_title.add_theme_constant_override("outline_size", 12)
+	roll_title.add_theme_color_override("font_outline_color", Color("#4e1a00"))
+	roll_area.add_child(roll_title)
+	roll_hint = Label.new()
+	roll_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	roll_hint.add_theme_font_size_override("font_size", 18)
+	roll_hint.add_theme_color_override("font_color", Color("#fff8e1"))
+	roll_hint.add_theme_constant_override("outline_size", 6)
+	roll_hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	roll_area.add_child(roll_hint)
+	roll_btn = RollButton.new()
+	roll_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	roll_area.add_child(roll_btn)
+	roll_btn.pressed.connect(func():
+		roll_title.text = "Tung nào!"
+		roll_hint.text = ""
+		_clear_extras()
+		roll_btn.set_busy()
+		action_chosen.emit({"action": "roll"}))
+	roll_area.visible = false
+
+
+## Đến lượt người chơi: hiện nút TUNG màu người chơi, kèm các nút phụ (thẻ kỹ năng, đổi đặc sản).
+func show_roll(p: Dictionary) -> void:
+	_clear_extras()
+	roll_title.text = "ĐẾN LƯỢT BẠN!"
+	roll_hint.text = "Nhấn để tung xúc xắc  ·  đang ở %s" % BoardData.plain_name(p["pos"])
+	roll_btn.activate(Color(colors[p["id"]]))
+	if p["cards"].has("XUC_XAC_VANG"):
+		roll_extras.add_child(_small_btn("Xúc Xắc Vàng", func():
+			_open_panel("Xúc Xắc Vàng")
+			_show_golden()))
+	if p["cards"].has("GIAI_TOA") and engine.giai_toa_targets(p["id"]).size() > 0:
+		roll_extras.add_child(_small_btn("Giải Tỏa", func():
+			_open_panel("Giải Tỏa")
+			_show_giai_toa()))
+	if engine.can_exchange(p["id"], "rare"):
+		roll_extras.add_child(_small_btn("Đổi đặc sản 3 miền → thẻ hiếm", func(): _emit({"action": "exchange", "kind": "rare"})))
+	if engine.can_exchange(p["id"], "common"):
+		roll_extras.add_child(_small_btn("Đổi 3 đặc sản cùng miền → thẻ", func(): _emit({"action": "exchange", "kind": "common"})))
+	_pop_roll_area()
+
+
+## Không phải lượt của bạn: nút xám, không bấm được, ghi rõ đang chờ ai.
+func show_roll_waiting(player_name: String) -> void:
+	_clear_extras()
+	roll_title.text = ""
+	roll_hint.text = "Lượt của %s" % player_name
+	roll_btn.set_waiting()
+	if not roll_area.visible:
+		_pop_roll_area()
+
+
+func hide_roll() -> void:
+	if roll_area.visible:
+		roll_area.visible = false
+
+
+func _pop_roll_area() -> void:
+	roll_area.visible = true
+	roll_area.modulate.a = 0.0
+	roll_btn.scale = Vector2.ONE * 0.6
+	roll_btn.pivot_offset = roll_btn.custom_minimum_size / 2.0
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(roll_area, "modulate:a", 1.0, 0.2)
+	tw.tween_property(roll_btn, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _open_panel(title: String) -> void:
+	decision_panel.visible = true
+	decision_title.text = title
+	roll_area.visible = false
+
+
+func _clear_extras() -> void:
+	for c in roll_extras.get_children():
+		c.queue_free()
+
+
+func _small_btn(text: String, cb: Callable) -> Button:
+	var b := _button(text, cb)
+	b.custom_minimum_size = Vector2(0, 34)
+	b.add_theme_font_size_override("font_size", 14)
+	return b
+
+
+## Làm mờ các thành phần phụ (nhật ký) khi đang tung và đi, để tập trung vào hành trình.
+func set_focus(on: bool) -> void:
+	create_tween().tween_property(log_panel, "modulate:a", 0.25 if on else 1.0, 0.3)
+	if on:
+		info_panel.visible = false
+
+
+# ---------------------------------------------------------------- banner thông tin ô / kết thúc lượt
+
+func _build_banner() -> void:
+	banner = PanelContainer.new()
+	banner.add_theme_stylebox_override("panel", _style(Color("#3e2723", 0.92), 14, Color("#ffca28")))
+	_anchor(banner, Control.PRESET_CENTER_TOP, -260, 56, 260, 120)
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(banner)
+	banner_label = Label.new()
+	banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	banner_label.add_theme_color_override("font_color", Color("#fff8e1"))
+	banner_label.add_theme_font_size_override("font_size", 17)
+	banner.add_child(banner_label)
+	banner.visible = false
+
+
+func show_banner(text: String, duration: float = 2.0) -> void:
+	banner_label.text = text
+	banner.visible = true
+	banner.modulate.a = 0.0
+	banner.pivot_offset = banner.size / 2.0
+	banner.scale = Vector2.ONE * 0.85
+	if _banner_tw and _banner_tw.is_valid():
+		_banner_tw.kill()
+	_banner_tw = create_tween()
+	_banner_tw.tween_property(banner, "modulate:a", 1.0, 0.15)
+	_banner_tw.parallel().tween_property(banner, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
+	_banner_tw.tween_interval(duration)
+	_banner_tw.tween_property(banner, "modulate:a", 0.0, 0.3)
+	_banner_tw.tween_callback(func(): banner.visible = false)
+
+
+## Dòng tóm tắt ô vừa đáp xuống.
+func tile_summary(t: int) -> String:
+	var td := BoardData.tile(t)
+	var name := BoardData.plain_name(t)
+	if BoardData.is_property(t):
+		var o: int = engine.owner[t]
+		if o < 0:
+			return "%s · Chưa có chủ · Giá %s xu" % [name, BoardData.money(td["price"])]
+		return "%s · Chủ: %s · %s · Thuê %s xu" % [name, engine.players[o]["name"], GameEngine.LEVEL_NAMES[engine.level[t]], BoardData.money(engine.rent(t))]
+	return name
 
 
 func _tile_desc(t: int) -> String:
@@ -570,7 +733,7 @@ func _on_speed() -> void:
 
 
 func set_cam_auto(on: bool) -> void:
-	cam_btn.text = "Camera: Tự động" if on else "Camera: Tự do"
+	cam_btn.text = "Góc nhìn: Điện ảnh" if on else "Góc nhìn: Toàn cảnh"
 
 
 func hide_tile_info() -> void:

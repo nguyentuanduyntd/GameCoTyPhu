@@ -12,7 +12,8 @@ Màn đầu tiên là **sảnh 3D**: các nhân vật đứng thành hàng ngang
 
 Điều khiển trong ván:
 - Kéo chuột trái để xoay bàn cờ, lăn chuột để phóng to/thu nhỏ (trên điện thoại: vuốt và chụm 2 ngón).
-- Nút **Camera: Tự động** xoay bàn cờ theo người đang đi để chữ trên ô luôn đọc xuôi; kéo chuột sẽ chuyển sang **Tự do**.
+- Đến lượt bạn: bấm nút tròn **TUNG** ở giữa đáy màn hình. Xúc xắc tung trong mâm, rồi camera chuyển xuống góc nhìn thứ nhất bám theo quân cờ và quay về toàn cảnh khi hết lượt.
+- Nút **Góc nhìn: Điện ảnh / Toàn cảnh** bật/tắt camera bám quân cờ ngay trong ván. Trong Cài đặt có "Camera điện ảnh khi đi" (Tắt / Chỉ lượt của bạn / Mọi người chơi) và "Toàn cảnh tự xoay theo người đang đi".
 - Bấm vào một ô để xem thông tin: chủ, tiền thuê, đặc sản, danh thắng.
 - Khi cần chọn ô (Tàu Thống Nhất, Lễ Hội, Giải Tỏa, thẻ Cơ Hội), bấm thẳng vào ô trên bàn cờ hoặc chọn trong danh sách.
 
@@ -57,6 +58,12 @@ Xem trọn hoạt ảnh rút một lá bài cụ thể (chỉ số lá theo `scr
 
 ```bash
 godot --path . -- --carddemo=khi_van:15 --shot=screenshots
+```
+
+Xem chậm một lượt của bạn (tốc độ x1, chụp 16 ảnh cách nhau 0,55 giây):
+
+```bash
+godot --path . -- --autotest-human --speed=1 --shots=16 --every=0.55 --shot=screenshots
 ```
 
 Chạy ván toàn bot ở tốc độ x4 và tự chụp 6 ảnh màn hình (`--autotest-human` để người chơi số 1 tự bấm nút):

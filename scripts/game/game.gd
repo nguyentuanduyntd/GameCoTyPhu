@@ -16,10 +16,9 @@ var speed := 1.0
 var _queue: Array = []
 var _busy := false
 var _picking: Array = []
-var cam_pivot: Node3D
+var cam_ctl: CameraController
 var camera: Camera3D
-var cam_yaw := 0.0
-var cam_dist := 27.0
+var dice_tray: DiceTray
 var _drag_start := Vector2.ZERO
 var _dragging := false
 var _autotest := false
@@ -27,9 +26,16 @@ var season_fx: SeasonFx
 var sun: DirectionalLight3D
 var env: Environment
 var sky_mat: ProceduralSkyMaterial
-var cam_auto := true
-var _cam_tween: Tween
-var _cam_look_z := 1.4
+var cinematic_on := true
+
+## Máy trạng thái trình diễn lượt chơi. Luật vẫn do GameEngine quyết định; trạng thái này chỉ điều phối
+## camera, nút bấm và hoạt ảnh, đồng thời chặn thao tác sai lúc (vd. bấm TUNG khi đang di chuyển).
+enum TurnState {
+	WAITING_FOR_TURN, CAMERA_TRANSITION_TO_PLAYER, WAITING_FOR_ROLL, ROLLING_DICE, SHOWING_DICE_RESULT,
+	CAMERA_FOLLOWING_PAWN, MOVING_PAWN, LANDING_ANIMATION, PROCESSING_TILE, CAMERA_RETURNING, TURN_COMPLETE,
+}
+var turn_state: int = TurnState.WAITING_FOR_TURN
+var _turn_player := -1
 var cards_ui: CardOverlay
 const CARD_STEPS := ["draw_card", "card_reveal", "card_pick"]
 var _shot_dir := ""
@@ -45,6 +51,9 @@ func _ready() -> void:
 		if a.begins_with("--shot="):
 			_shot_dir = a.substr(7)
 	speed = 4.0 if _autotest else Global.speed
+	for a in args:
+		if a.begins_with("--speed="):
+			speed = float(a.substr(8))
 
 	_setup_environment()
 	board = BoardView.new()
@@ -67,6 +76,11 @@ func _ready() -> void:
 
 	hud = Hud.new()
 	add_child(hud)
+	dice_tray = DiceTray.new()
+	add_child(dice_tray)
+	dice_tray.settled.connect(func():
+		if turn_state == TurnState.ROLLING_DICE:
+			_set_state(TurnState.SHOWING_DICE_RESULT))
 	cards_ui = CardOverlay.new()
 	add_child(cards_ui)
 	cards_ui.draw_pressed.connect(_on_card_draw)
@@ -80,8 +94,8 @@ func _ready() -> void:
 	hud.restart_requested.connect(func(): get_tree().reload_current_scene())
 	hud.speed_changed.connect(_on_speed_changed)
 	hud.cam_toggled.connect(_on_cam_toggled)
-	cam_auto = Global.cam_auto
-	hud.set_cam_auto(cam_auto)
+	cinematic_on = Global.cinematic > 0
+	hud.set_cam_auto(cinematic_on)
 	Global.settings_changed.connect(_apply_settings)
 	_apply_settings()
 	if not _autotest:
@@ -91,15 +105,14 @@ func _ready() -> void:
 	# Chế độ kiểm thử hình ảnh: dựng sẵn mọi danh thắng, đặt camera theo tham số
 	for a in args:
 		if a.begins_with("--camdist="):
-			cam_dist = float(a.substr(10))
-			_update_camera()
+			cam_ctl.dist = float(a.substr(10))
 		if a.begins_with("--camlook="):
-			_cam_look_z = float(a.substr(10))
-			_update_camera()
+			cam_ctl.set_look_z(float(a.substr(10)))
 		if a.begins_with("--camyaw="):
-			cam_auto = false
-			cam_yaw = deg_to_rad(float(a.substr(9)))
-			_update_camera()
+			cam_ctl.auto_side = false
+			cam_ctl.yaw = deg_to_rad(float(a.substr(9)))
+			cam_ctl.orbit(0.0)
+		cam_ctl.snap()
 	if args.has("--showcase"):
 		for t in BoardData.TILE_COUNT:
 			if BoardData.is_province(t):
@@ -144,29 +157,19 @@ func _setup_environment() -> void:
 
 
 func _setup_camera() -> void:
-	cam_pivot = Node3D.new()
-	add_child(cam_pivot)
-	camera = Camera3D.new()
-	camera.fov = 42
-	cam_pivot.add_child(camera)
-	_update_camera()
-
-
-func _update_camera() -> void:
-	cam_pivot.rotation.y = cam_yaw
-	camera.position = Vector3(0, cam_dist * 0.88, cam_dist * 0.47 + (_cam_look_z - 1.4))
-	camera.transform = Transform3D(Basis.looking_at(Vector3(0, 0, _cam_look_z) - camera.position, Vector3.UP), camera.position)
+	cam_ctl = CameraController.new()
+	add_child(cam_ctl)
+	cam_ctl.setup(board)
+	camera = cam_ctl.camera
 
 
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton:
 		var mb := ev as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-			cam_dist = clampf(cam_dist - 1.0, 11.0, 34.0)
-			_update_camera()
+			cam_ctl.zoom(0.94)
 		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			cam_dist = clampf(cam_dist + 1.0, 11.0, 34.0)
-			_update_camera()
+			cam_ctl.zoom(1.06)
 		elif mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
 				_drag_start = mb.position
@@ -178,15 +181,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 		if mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
 			if mm.position.distance_to(_drag_start) > 10:
 				_dragging = true
-			if _dragging:
-				if cam_auto:
-					_on_cam_toggled(false)
-					hud.set_cam_auto(false)
-				cam_yaw -= mm.relative.x * 0.006
-				_update_camera()
+			if _dragging and cam_ctl.mode == CameraController.Mode.OVERVIEW:
+				cam_ctl.orbit(mm.relative.x * 0.006)
 	elif ev is InputEventMagnifyGesture:
-		cam_dist = clampf(cam_dist / (ev as InputEventMagnifyGesture).factor, 11.0, 34.0)
-		_update_camera()
+		cam_ctl.zoom(1.0 / (ev as InputEventMagnifyGesture).factor)
 
 
 func _try_pick(screen: Vector2) -> void:
@@ -205,23 +203,14 @@ func _try_pick(screen: Vector2) -> void:
 		hud.pick_tile(t)
 
 
-## Camera tự động xoay về cạnh bàn cờ có ô t, để chữ trên ô luôn đọc xuôi chiều.
+## Toàn cảnh: xoay bàn cờ về cạnh chứa ô t để chữ trên ô đọc xuôi.
 func _focus_tile(t: int) -> void:
-	if not cam_auto:
-		return
-	var side: int = t / BoardData.SIDE
-	var target: float = [0.0, -PI / 2, PI, PI / 2][side]
-	var diff := wrapf(target - cam_yaw, -PI, PI)
-	if absf(diff) < 0.01:
-		return
-	if _cam_tween and _cam_tween.is_valid():
-		_cam_tween.kill()
-	_cam_tween = create_tween()
-	_cam_tween.tween_method(func(v: float): cam_yaw = v; _update_camera(), cam_yaw, cam_yaw + diff, 0.6 / speed).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	cam_ctl.face_side_of(t)
 
 
 func _apply_settings() -> void:
 	sun.shadow_enabled = Global.shadows
+	cam_ctl.auto_side = Global.cam_auto
 	season_fx.set_weather_enabled(Global.weather_fx)
 
 
@@ -229,10 +218,27 @@ func _season_music(s: int) -> String:
 	return "music_game_a" if s <= 1 else "music_game_b"
 
 
+## Nút "Góc nhìn": bật/tắt camera điện ảnh ngay trong ván; tắt thì lập tức về toàn cảnh.
 func _on_cam_toggled(on: bool) -> void:
-	cam_auto = on
-	if on and engine and not engine.pending.is_empty():
-		_focus_tile(token_tile[engine.pending["p"]])
+	cinematic_on = on
+	if not on and cam_ctl.mode != CameraController.Mode.OVERVIEW:
+		cam_ctl.overview(0.8)
+
+
+## Tốc độ trình diễn: lượt của máy chạy nhanh hơn để ván không kéo dài.
+func _pspeed(pid: int) -> float:
+	return speed * (1.7 if engine.players[pid]["is_bot"] else 1.0)
+
+
+## Có dùng camera điện ảnh (POV) cho lượt của người chơi pid không.
+func _cinematic_for(pid: int) -> bool:
+	if not cinematic_on or Global.cinematic == 0:
+		return false
+	return Global.cinematic == 2 or not engine.players[pid]["is_bot"]
+
+
+func _set_state(st: int) -> void:
+	turn_state = st
 
 
 func _on_pick_mode(tiles: Array) -> void:
@@ -267,12 +273,13 @@ func _relayout(instant: bool = false) -> void:
 		await tw.finished
 
 
-func _move_token(pid: int, path: Array, fast: bool) -> void:
-	var tok: Node3D = tokens[pid]
-	var step := (0.07 if (fast or path.size() > 12) else 0.2) / speed
+func _move_token(pid: int, path: Array, fast: bool, follow: bool = false) -> void:
+	var tok: Character3D = tokens[pid]
+	var step := (0.07 if (fast or path.size() > 12) else (0.27 if follow else 0.2)) / _pspeed(pid)
+	tok.set_walking(true)
 	for t in path:
 		var target := board.tile_center(t)
-		var mid := (tok.position + target) / 2.0 + Vector3(0, 0.45, 0)
+		var mid := (tok.position + target) / 2.0 + Vector3(0, 0.35, 0)
 		var dir := target - tok.position
 		dir.y = 0
 		if dir.length() > 0.01:
@@ -281,9 +288,12 @@ func _move_token(pid: int, path: Array, fast: bool) -> void:
 		tw.tween_property(tok, "position", mid, step * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tw.tween_property(tok, "position", target, step * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		await tw.finished
+		if follow:
+			cam_ctl.step_to(t)
 		if not fast or path.size() <= 12:
 			Audio.play("step", 0.15, -6.0)
 		token_tile[pid] = t
+	tok.set_walking(false)
 	await _relayout()
 
 
@@ -297,6 +307,9 @@ func _float_text(pid: int, text: String, col: Color) -> void:
 	l.outline_size = 12
 	l.outline_modulate = Color(0, 0, 0, 0.8)
 	l.no_depth_test = true
+	# Giữ cỡ chữ vừa mắt khi camera đang ở gần (POV / zoom ô)
+	var cam_d := camera.global_position.distance_to(tokens[pid].global_position)
+	l.pixel_size = 0.006 * clampf(cam_d / 22.0, 0.22, 1.0)
 	l.position = tokens[pid].position + Vector3(0, 1.1, 0)
 	add_child(l)
 	var tw := create_tween().set_parallel(true)
@@ -327,11 +340,15 @@ func _play(ev: Dictionary) -> void:
 		"log":
 			hud.add_log(ev["text"])
 		"turn":
+			await _finish_turn_presentation(ev["p"])
+			_set_state(TurnState.CAMERA_TRANSITION_TO_PLAYER)
+			_turn_player = ev["p"]
 			if ev["p"] == human_id and not engine.players[human_id]["is_bot"]:
 				Audio.play("turn")
 			hud.set_current(ev["p"])
 			hud.refresh_players()
 			_focus_tile(token_tile[ev["p"]])
+			_set_state(TurnState.WAITING_FOR_TURN)
 		"round":
 			hud.set_round(ev["n"])
 			season_fx.set_blackout(false)
@@ -349,15 +366,21 @@ func _play(ev: Dictionary) -> void:
 			var d: int = ev["delta"]
 			_float_text(ev["p"], ("+" if d > 0 else "") + BoardData.money(d), Color("#76ff03") if d > 0 else Color("#ff5252"))
 		"dice":
-			Audio.play("dice", 0.08)
-			await dice.roll(ev["d"], speed)
+			# Giá trị lấy nguyên từ engine: mâm xúc xắc chỉ diễn lại, quân cờ đi đúng số này
+			_set_state(TurnState.ROLLING_DICE)
+			hud.hide_roll()
+			hud.set_focus(true)
+			await dice_tray.roll(ev["d"], _pspeed(ev["p"]))
+			dice.show_values(ev["d"])
+			_set_state(TurnState.PROCESSING_TILE)
 		"move":
-			await _move_token(ev["p"], ev["path"], ev["fast"])
-			_focus_tile(token_tile[ev["p"]])
+			await _present_move(ev["p"], ev["path"], ev["fast"])
 		"jail":
 			Audio.play("horn")
 			token_tile[ev["p"]] = BoardData.JAIL_TILE
 			await _relayout()
+			if cam_ctl.mode != CameraController.Mode.OVERVIEW:
+				cam_ctl.focus(BoardData.JAIL_TILE, 0.6 / speed)
 			await hud.show_toast("%s bị KẸT XE!" % engine.players[ev["p"]]["name"], 0.9 / speed)
 		"tile":
 			board.set_tile_state(ev["tile"], ev["owner"], ev["level"])
@@ -374,11 +397,12 @@ func _play(ev: Dictionary) -> void:
 			await cards_ui.play_draw(ev["cards"])
 		"duel":
 			Audio.play("duel")
-			await dice.roll([ev["ra"], ev["rb"]], speed)
+			var na: String = engine.players[ev["a"]]["name"]
+			var nb: String = engine.players[ev["b"]]["name"]
+			await dice_tray.roll([ev["ra"], ev["rb"]], speed, "ĐỤNG ĐỘ: %s  vs  %s" % [na, nb])
 			if ev["ra"] != ev["rb"]:
 				tokens[ev["a"] if ev["ra"] > ev["rb"] else ev["b"]].cheer()
 				tokens[ev["b"] if ev["ra"] > ev["rb"] else ev["a"]].sad()
-			await hud.show_toast("ĐỤNG ĐỘ\n%s  %d – %d  %s" % [engine.players[ev["a"]]["name"], ev["ra"], ev["rb"], engine.players[ev["b"]]["name"]], 1.2 / speed)
 		"swap":
 			var ta: int = token_tile[ev["a"]]
 			token_tile[ev["a"]] = token_tile[ev["b"]]
@@ -418,6 +442,9 @@ func _play(ev: Dictionary) -> void:
 		"charity":
 			Audio.play("win", 0.0, -6.0)
 		"game_over":
+			cam_ctl.overview(1.2)
+			hud.hide_roll()
+			hud.set_focus(false)
 			Audio.stop_music(0.8)
 			Audio.play("win")
 			tokens[ev["winner"]].cheer()
@@ -438,8 +465,14 @@ func _after_queue() -> void:
 	if CARD_STEPS.has(String(pend["type"])):
 		await _card_step(pend, p)
 		return
+	if pend["type"] == "turn":
+		_set_state(TurnState.WAITING_FOR_ROLL)
+		hud.set_focus(false)
 	if p["is_bot"]:
-		hud.show_waiting("%s đang suy nghĩ..." % p["name"])
+		if pend["type"] == "turn":
+			hud.show_roll_waiting(p["name"])
+		else:
+			hud.show_waiting("%s đang suy nghĩ..." % p["name"])
 		await get_tree().create_timer(0.45 / speed).timeout
 		if engine.pending != pend:
 			return
@@ -540,6 +573,54 @@ func _submit_card(action: Dictionary) -> void:
 		_feed(evs)
 
 
+## Di chuyển quân cờ: với camera điện ảnh thì chuyển cảnh xuống POV, bám theo từng bước,
+## dừng lại zoom vào ô đích và hiện thông tin ô; còn lại đi trong góc nhìn toàn cảnh.
+func _present_move(pid: int, path: Array, fast: bool) -> void:
+	if path.is_empty():
+		return
+	var start: int = token_tile[pid]
+	var backward: bool = path[0] == posmod(start - 1, BoardData.TILE_COUNT)
+	var follow := _cinematic_for(pid) and not fast and not backward and path.size() <= 14
+	var last: int = path[path.size() - 1]
+	var sp := _pspeed(pid)
+	if follow:
+		_set_state(TurnState.CAMERA_FOLLOWING_PAWN)
+		cam_ctl.follow(tokens[pid], start, 0.85 / sp)
+		await get_tree().create_timer(0.5 / sp).timeout
+		_set_state(TurnState.MOVING_PAWN)
+		await _move_token(pid, path, fast, true)
+		_set_state(TurnState.LANDING_ANIMATION)
+		(tokens[pid] as Character3D).land()
+		cam_ctl.impact(0.05)
+		cam_ctl.focus(last, 0.7 / sp)
+		hud.show_banner(hud.tile_summary(last), 1.8 / sp)
+		await get_tree().create_timer(0.55 / sp).timeout
+	else:
+		_set_state(TurnState.MOVING_PAWN)
+		await _move_token(pid, path, fast)
+		(tokens[pid] as Character3D).land()
+		_focus_tile(last)
+		if not fast:
+			hud.show_banner(hud.tile_summary(last), 1.4 / sp)
+	_set_state(TurnState.PROCESSING_TILE)
+
+
+## Kết thúc phần trình diễn của lượt trước: camera nâng lên, lùi về toàn cảnh, báo hoàn thành lượt.
+func _finish_turn_presentation(next_pid: int) -> void:
+	if _turn_player < 0:
+		return
+	_set_state(TurnState.CAMERA_RETURNING)
+	hud.set_focus(false)
+	if cam_ctl.mode != CameraController.Mode.OVERVIEW:
+		cam_ctl.face_side_of(token_tile[next_pid])
+		cam_ctl.overview(1.1 / speed)
+		await get_tree().create_timer(0.45 / speed).timeout
+	_set_state(TurnState.TURN_COMPLETE)
+	var prev: Dictionary = engine.players[_turn_player]
+	if _turn_player == human_id and not prev["is_bot"] and prev["alive"]:
+		hud.show_banner("Được tung tiếp!" if next_pid == _turn_player else "Hoàn thành lượt!", 1.0 / speed)
+
+
 func _on_speed_changed(s: float) -> void:
 	speed = s
 	Global.speed = s
@@ -548,6 +629,13 @@ func _on_speed_changed(s: float) -> void:
 func _on_human_action(action: Dictionary) -> void:
 	if _busy or engine.pending.is_empty() or engine.pending["p"] != human_id:
 		return
+	# Chỉ được tung khi đang chờ tung — chặn bấm lặp hoặc bấm lúc đang di chuyển/xử lý ô
+	var kind: String = action.get("action", "")
+	var is_turn_roll: bool = engine.pending["type"] == "turn" and (kind == "roll" or kind == "golden")
+	if is_turn_roll and turn_state != TurnState.WAITING_FOR_ROLL:
+		return
+	if is_turn_roll:
+		_set_state(TurnState.ROLLING_DICE)
 	var evs := engine.act(human_id, action)
 	if evs.is_empty():
 		hud.show_decision(engine.pending)
@@ -557,13 +645,25 @@ func _on_human_action(action: Dictionary) -> void:
 
 # ---------------------------------------------------------------- kiểm thử tự động
 
+func _exit_tree() -> void:
+	if _autotest and engine:
+		print("AUTOTEST round=%d game_over=%s state=%d pending=%s" % [engine.round_num, engine.game_over, turn_state, engine.pending.get("type", "-")])
+
+
 func _start_autotest() -> void:
 	if _shot_dir != "":
 		DirAccess.make_dir_recursive_absolute(_shot_dir)
 		var shots := 0
-		while shots < 6:
-			await get_tree().create_timer(5.0).timeout
+		var total := 6
+		var every := 5.0
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--shots="):
+				total = int(a.substr(8))
+			if a.begins_with("--every="):
+				every = float(a.substr(8))
+		while shots < total:
+			await get_tree().create_timer(every).timeout
 			var img := get_viewport().get_texture().get_image()
-			img.save_png(_shot_dir.path_join("game_%d.png" % shots))
+			img.save_png(_shot_dir.path_join("game_%02d.png" % shots))
 			shots += 1
 		get_tree().quit()

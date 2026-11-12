@@ -100,6 +100,18 @@
 3. Tung đôi → được tung tiếp; 3 lần đôi liên tiếp → vào Kẹt Xe.
 4. Giới hạn thời gian mỗi lượt khi chơi online (ví dụ 20 giây; hết giờ → AI tự xử lý).
 
+### 3.1b. Trình diễn lượt chơi (camera điện ảnh)
+
+Luật vẫn do engine quyết định; phần trình diễn chạy theo máy trạng thái:
+`WAITING_FOR_TURN → CAMERA_TRANSITION_TO_PLAYER → WAITING_FOR_ROLL → ROLLING_DICE → SHOWING_DICE_RESULT → CAMERA_FOLLOWING_PAWN → MOVING_PAWN → LANDING_ANIMATION → PROCESSING_TILE → CAMERA_RETURNING → TURN_COMPLETE`.
+
+- **Chờ tung:** nút tròn **TUNG** giữa đáy màn hình (viền vàng ánh kim, lòng màu người chơi, hai viên xúc xắc 3D, phát sáng nhịp nhẹ), trên có "ĐẾN LƯỢT BẠN! — Nhấn để tung xúc xắc". Rê chuột phóng to, nhấn lún xuống + vòng sóng; nhấn xong khoá. Lượt người khác: nút xám "CHỜ" + "Lượt của …".
+- **Tung:** mâm gỗ lót nỉ đỏ viền vàng giữa màn hình; xúc xắc ném vào, xoay 3 trục, rơi và nảy theo trọng lực, va thành mâm, có bóng đổ và tiếng chạm; cuối cùng khớp đúng mặt kết quả của engine và hiện "3 + 4 = 7" kiểu pop-up với vòng sáng (tung đôi có thêm "ĐÔI!").
+- **Đi:** camera chuyển cảnh mượt từ toàn cảnh xuống góc nhìn thứ nhất sau lưng quân cờ, nhìn về phía trước, bám theo từng bước (rung nhẹ theo bước, xoay dần ở góc bàn). Nhân vật đánh tay, đánh chân khi bước.
+- **Đáp:** quân cờ nhún xuống, camera zoom vào ô, banner hiện thông tin ô → xử lý ô (mua đất, rút bài…).
+- **Hết lượt:** camera nâng lên, lùi về toàn cảnh; lượt của bạn có báo "Hoàn thành lượt!".
+- Nút **Góc nhìn: Điện ảnh / Toàn cảnh** trong ván để tắt camera POV bất cứ lúc nào. Cài đặt "Camera điện ảnh khi đi": Tắt / Chỉ lượt của bạn / Mọi người chơi (mặc định). Lượt của máy trình diễn nhanh hơn ×1,7.
+
 ### 3.2. Đất & xây dựng
 - Dừng ở tỉnh chưa ai mua → mua hoặc bỏ qua (**không đấu giá** để ván nhanh hơn trên mobile).
 - **Xây khi dừng lại đúng ô của mình** (không bắt buộc sở hữu cả nhóm như luật cổ điển → ván nhanh hơn).
