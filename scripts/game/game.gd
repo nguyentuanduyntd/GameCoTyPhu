@@ -107,6 +107,7 @@ func _ready() -> void:
 	hud.auction_panel.fold.connect(func(): _submit_auction({"action": "fold"}))
 	hud.building_picker.chosen.connect(func(id): _submit_choice({"action": "choose", "type": id}))
 	hud.building_picker.later.connect(func(): _submit_choice({"action": "later"}))
+	hud.decision_popup.avoid_point = _pending_screen_point
 	cinematic_on = Global.cinematic > 0
 	hud.set_cam_auto(cinematic_on)
 	Global.settings_changed.connect(_apply_settings)
@@ -205,6 +206,8 @@ func _setup_camera() -> void:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and OS.is_debug_build():
+		_debug_key((ev as InputEventKey).keycode)
 	if ev is InputEventMouseButton:
 		var mb := ev as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -422,7 +425,8 @@ func _play(ev: Dictionary) -> void:
 			await _relayout()
 			if cam_ctl.mode != CameraController.Mode.OVERVIEW:
 				cam_ctl.focus(BoardData.JAIL_TILE, 0.6 / speed)
-			await hud.show_toast("%s bị KẸT XE!" % engine.players[ev["p"]]["name"], 0.9 / speed)
+			hud.notify.cancel_tag("land")   # gộp "Kẹt Xe" (tên ô) + "bị KẸT XE" thành một thông báo
+			await hud.show_toast("%s bị KẸT XE!" % engine.players[ev["p"]]["name"], 0.9 / speed, "jail")
 		"tile":
 			var t_ev: int = ev["tile"]
 			var grew: bool = ev["owner"] >= 0 and (ev["level"] > board._shown_level[t_ev] or ev["owner"] != board._shown_owner[t_ev])
@@ -596,7 +600,11 @@ func _after_queue() -> void:
 	else:
 		hud.show_decision(pend)
 		if _autotest:
-			await get_tree().create_timer(0.6).timeout
+			var delay := 0.6
+			for arg in OS.get_cmdline_user_args():
+				if arg.begins_with("--clickdelay="):
+					delay = float(arg.substr(13))
+			await get_tree().create_timer(delay).timeout
 			hud.autotest_click()
 
 
@@ -818,7 +826,7 @@ func _present_move(pid: int, path: Array, fast: bool) -> void:
 		(tokens[pid] as Character3D).land()
 		cam_ctl.impact(0.05)
 		cam_ctl.focus(last, 0.7 / sp)
-		hud.show_banner(hud.tile_summary(last), 1.8 / sp)
+		hud.show_banner(hud.tile_summary(last), 1.8 / sp, "land")
 		await get_tree().create_timer(0.55 / sp).timeout
 	else:
 		_set_state(TurnState.MOVING_PAWN)
@@ -826,8 +834,53 @@ func _present_move(pid: int, path: Array, fast: bool) -> void:
 		(tokens[pid] as Character3D).land()
 		_focus_tile(last)
 		if not fast:
-			hud.show_banner(hud.tile_summary(last), 1.4 / sp)
+			hud.show_banner(hud.tile_summary(last), 1.4 / sp, "land")
 	_set_state(TurnState.PROCESSING_TILE)
+
+
+# ---------------------------------------------------------------- phím kiểm thử (chỉ bản debug)
+var _dbg_popup: UiPopup
+var _dbg_variant := 0
+
+
+## F1: xem popup mẫu (lần lượt thường / xui / may) · F2: loạt thông báo (có trùng để thử gộp)
+## F6: đổi độ phân giải cửa sổ 1280×720 ↔ 1920×1080.
+func _debug_key(k: int) -> void:
+	match k:
+		KEY_F1:
+			if _dbg_popup == null:
+				_dbg_popup = UiPopup.new()
+				hud.root.add_child(_dbg_popup)
+				_dbg_popup.avoid_point = _pending_screen_point
+			var titles := ["Mua Hà Nội?", "Bạn đang Kẹt Xe", "Trúng xổ số!"]
+			var icons := ["land", "jail", "star"]
+			_dbg_popup.open_popup(titles[_dbg_variant], icons[_dbg_variant], _dbg_variant)
+			_dbg_popup.set_desc("Popup mẫu (F1). Enter = nút chính, Esc = nút phụ.")
+			_dbg_popup.add_action("Đồng ý", _dbg_popup.close_popup, "primary")
+			_dbg_popup.add_action("Thêm nút", func(): pass, "accent")
+			_dbg_popup.add_action("Bỏ qua", _dbg_popup.close_popup)
+			_dbg_variant = (_dbg_variant + 1) % 3
+		KEY_F2:
+			hud.show_banner("Thông báo thường", 1.6)
+			hud.show_banner("Thông báo thường", 1.6)   # trùng → tự gộp
+			hud.show_toast("Bạn bị KẸT XE!", 1.6)
+			hud.show_toast("Bạn nhận Quỹ Từ Thiện 300 xu!", 1.6)
+		KEY_F6:
+			var big := DisplayServer.window_get_size().x < 1600
+			DisplayServer.window_set_size(Vector2i(1920, 1080) if big else Vector2i(1280, 720))
+
+
+## Toạ độ màn hình của quân cờ đang phải quyết định (để popup không che nhân vật). (-1,-1) nếu không có.
+func _pending_screen_point() -> Vector2:
+	if engine == null or engine.pending.is_empty() or camera == null:
+		return Vector2(-1, -1)
+	var pid: int = engine.pending.get("p", -1)
+	if pid < 0 or pid >= tokens.size() or not is_instance_valid(tokens[pid]):
+		return Vector2(-1, -1)
+	var wp: Vector3 = (tokens[pid] as Node3D).global_position + Vector3(0, 0.6, 0)
+	if camera.is_position_behind(wp):
+		return Vector2(-1, -1)
+	return camera.unproject_position(wp)
 
 
 ## Kết thúc phần trình diễn của lượt trước: camera nâng lên, lùi về toàn cảnh, báo hoàn thành lượt.

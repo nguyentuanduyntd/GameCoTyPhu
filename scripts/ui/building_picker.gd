@@ -15,16 +15,7 @@ var _sent := false
 
 func setup(engine: GameEngine) -> void:
 	_engine = engine
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#3e2723", 0.96)
-	sb.set_corner_radius_all(18)
-	sb.border_color = Color("#ffca28")
-	sb.set_border_width_all(3)
-	sb.shadow_color = Color(0, 0, 0, 0.5)
-	sb.shadow_size = 14
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 16)
-	add_theme_stylebox_override("panel", sb)
+	theme_type_variation = "WoodPanel"
 	set_anchors_preset(Control.PRESET_CENTER)
 	offset_left = -470
 	offset_right = 470
@@ -35,7 +26,8 @@ func setup(engine: GameEngine) -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	add_child(v)
-	_title = _label(26, Color("#ffca28"))
+	_title = _label(26, UiPalette.get_default().gold)
+	_title.add_theme_font_override("font", UiTheme.bold_font())
 	v.add_child(_title)
 	_sub = _label(15, Color("#d7ccc8"))
 	v.add_child(_sub)
@@ -43,11 +35,14 @@ func setup(engine: GameEngine) -> void:
 	_cards.columns = 4
 	_cards.add_theme_constant_override("h_separation", 10)
 	_cards.add_theme_constant_override("v_separation", 10)
+	_cards.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(_cards)
 	var later_btn := Button.new()
 	later_btn.text = "Để sau (giữ đất trống, quay lại ô này để xây)"
 	later_btn.custom_minimum_size = Vector2(0, 40)
 	later_btn.focus_mode = Control.FOCUS_NONE
+	later_btn.theme_type_variation = "GhostButton"
+	later_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	later_btn.pressed.connect(func():
 		Audio.play("click")
 		_send("", true))
@@ -114,7 +109,7 @@ func _card(bt: BuildingType, opt: Dictionary, price: int) -> Control:
 	var ok: bool = opt["ok"]
 	var panel := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#fff8e1") if ok else Color("#9e9e9e")
+	sb.bg_color = UiPalette.get_default().paper if ok else Color("#9e9e9e")
 	sb.set_corner_radius_all(14)
 	sb.border_color = bt.color
 	sb.set_border_width_all(4)

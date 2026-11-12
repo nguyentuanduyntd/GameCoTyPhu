@@ -19,34 +19,27 @@ var cards: Array = []
 var top_bar: TopBar
 var event_log: EventLog
 var avatars: AvatarFactory
-var _shown_cash := {}
-var _cash_tw := {}
-var round_label: Label
-var log_box: RichTextLabel
 var decision_panel: PanelContainer
 var decision_title: Label
 var decision_desc: Label
 var decision_buttons: HFlowContainer
 var tile_scroll: ScrollContainer
 var tile_grid: GridContainer
-var toast_panel: PanelContainer
-var toast_label: Label
 var waiting_label: Label
-var over_panel: PanelContainer
 var speed_btn: Button
 var cam_btn: Button
 var info_panel: PanelContainer
+var over_popup: UiPopup
 var log_panel: PanelContainer
 var roll_area: VBoxContainer
 var roll_title: Label
 var roll_hint: Label
 var roll_btn: RollButton
 var roll_extras: HFlowContainer
-var banner: PanelContainer
 var auction_panel: AuctionPanel
+var decision_popup: UiPopup
+var notify: NotifyQueue
 var building_picker: BuildingPicker
-var banner_label: Label
-var _banner_tw: Tween
 var info_label: RichTextLabel
 
 var _pick_callback: Callable = Callable()
@@ -124,78 +117,45 @@ func _build() -> void:
 	right.add_child(event_log)
 	log_panel = event_log
 
-	# --- Dưới giữa: bảng quyết định
-	decision_panel = PanelContainer.new()
-	decision_panel.add_theme_stylebox_override("panel", _style(Color("#3e2723", 0.92), 14, Color("#ffca28")))
-	_anchor(decision_panel, Control.PRESET_CENTER_BOTTOM, -330, -14, 330, -14)
-	decision_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	root.add_child(decision_panel)
-	var dv := VBoxContainer.new()
-	dv.add_theme_constant_override("separation", 8)
-	decision_panel.add_child(dv)
-	decision_title = Label.new()
-	decision_title.add_theme_font_size_override("font_size", 22)
-	decision_title.add_theme_color_override("font_color", Color("#ffca28"))
-	decision_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	dv.add_child(decision_title)
-	decision_desc = Label.new()
-	decision_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	decision_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	decision_desc.add_theme_color_override("font_color", Color("#fff8e1"))
-	dv.add_child(decision_desc)
+	# --- Popup quyết định dùng chung (tự tránh che nhân vật)
+	decision_popup = UiPopup.new()
+	root.add_child(decision_popup)
+	decision_panel = decision_popup
+	decision_title = decision_popup.title_label
+	decision_desc = decision_popup.desc
+	decision_buttons = decision_popup.actions
 	tile_scroll = ScrollContainer.new()
 	tile_scroll.custom_minimum_size = Vector2(640, 150)
 	tile_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	tile_scroll.visible = false
-	dv.add_child(tile_scroll)
+	decision_popup.body.add_child(tile_scroll)
 	tile_grid = GridContainer.new()
 	tile_grid.columns = 4
 	tile_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tile_scroll.add_child(tile_grid)
-	decision_buttons = HFlowContainer.new()
-	decision_buttons.alignment = FlowContainer.ALIGNMENT_CENTER
-	decision_buttons.add_theme_constant_override("h_separation", 10)
-	decision_buttons.add_theme_constant_override("v_separation", 8)
-	dv.add_child(decision_buttons)
-	decision_panel.visible = false
 
 	_build_roll_area()
-	_build_banner()
 	waiting_label = Label.new()
 	_anchor(waiting_label, Control.PRESET_CENTER_BOTTOM, -300, -60, 300, -24)
 	waiting_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	waiting_label.add_theme_font_size_override("font_size", 20)
-	waiting_label.add_theme_color_override("font_color", Color("#ffffff"))
-	waiting_label.add_theme_color_override("font_outline_color", Color("#000000"))
-	waiting_label.add_theme_constant_override("outline_size", 6)
+	waiting_label.theme_type_variation = "LightLabel"
+	waiting_label.add_theme_font_size_override("font_size", 19)
 	root.add_child(waiting_label)
 
-	# --- Thông báo giữa màn hình
-	toast_panel = PanelContainer.new()
-	toast_panel.add_theme_stylebox_override("panel", _style(Color("#fff8e1", 0.96), 14, Color("#e53935")))
-	_anchor(toast_panel, Control.PRESET_CENTER, -210, -170, 210, -110)
-	toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(toast_panel)
-	toast_label = Label.new()
-	toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	toast_label.add_theme_font_size_override("font_size", 20)
-	toast_label.add_theme_color_override("font_color", Color("#3e2723"))
-	toast_panel.add_child(toast_label)
-	toast_panel.visible = false
+	# --- Hàng đợi thông báo (toast/banner) phía trên-giữa, không chặn thao tác
+	notify = NotifyQueue.new()
+	root.add_child(notify)
 
-	# --- Bảng thông tin ô (bấm vào ô trên bàn cờ)
+	# --- Thẻ thông tin ô (bấm vào ô trên bàn cờ)
 	info_panel = PanelContainer.new()
-	info_panel.add_theme_stylebox_override("panel", _style(Color("#fff8e1", 0.97), 12, Color("#5d4037")))
-	_anchor(info_panel, Control.PRESET_CENTER_RIGHT, -300, -150, -10, 150)
+	_anchor(info_panel, Control.PRESET_CENTER_RIGHT, -330, -150, -12, 150)
 	root.add_child(info_panel)
 	var iv := VBoxContainer.new()
 	info_panel.add_child(iv)
 	info_label = RichTextLabel.new()
 	info_label.bbcode_enabled = true
 	info_label.fit_content = true
-	info_label.custom_minimum_size = Vector2(270, 0)
-	info_label.add_theme_color_override("default_color", Color("#3e2723"))
+	info_label.custom_minimum_size = Vector2(280, 0)
 	info_label.add_theme_font_size_override("normal_font_size", 14)
 	info_label.add_theme_font_size_override("bold_font_size", 18)
 	iv.add_child(info_label)
@@ -250,14 +210,21 @@ func _icon_button(icon: String, text: String, tip: String, cb: Callable) -> Butt
 
 # ---------------------------------------------------------------- thông báo
 
-func show_toast(text: String, duration: float) -> void:
-	toast_label.text = text
-	toast_panel.visible = true
-	toast_panel.modulate = Color(1, 1, 1, 0)
-	var tw := create_tween()
-	tw.tween_property(toast_panel, "modulate", Color.WHITE, 0.15)
-	await get_tree().create_timer(duration).timeout
-	toast_panel.visible = false
+## Thông báo ngắn có chờ (game dùng để tạo nhịp). Đi qua hàng đợi nên không đè nhau, tự gộp trùng.
+func show_toast(text: String, duration: float, tag: String = "") -> void:
+	var id := notify.push(text.replace("\n\n", "\n"), _kind_of(text), duration, tag)
+	await notify.wait(id)
+
+
+func _kind_of(text: String) -> String:
+	var t := text.to_upper()
+	for w in ["KẸT XE", "PHÁ SẢN", "CÚP ĐIỆN", "BÃO", "MẤT"]:
+		if t.find(w) >= 0:
+			return "bad"
+	for w in ["THẮNG", "DANH THẮNG", "GOM ĐỦ", "HOÀN THÀNH", "TRÚNG", "QUỸ"]:
+		if t.find(w) >= 0:
+			return "good"
+	return "info"
 
 
 func show_waiting(text: String) -> void:
@@ -267,7 +234,7 @@ func show_waiting(text: String) -> void:
 # ---------------------------------------------------------------- quyết định
 
 func clear_decision() -> void:
-	decision_panel.visible = false
+	decision_popup.close_popup()
 	if roll_area and roll_btn.state == RollButton.State.ACTIVE:
 		roll_area.visible = false
 	tile_scroll.visible = false
@@ -284,7 +251,7 @@ func autotest_click() -> void:
 	if roll_area.visible and roll_btn.is_ready():
 		roll_btn.press()
 		return
-	if not decision_panel.visible:
+	if not decision_popup.is_open:
 		return
 	if tile_scroll.visible and tile_grid.get_child_count() > 0:
 		(tile_grid.get_child(0) as Button).pressed.emit()
@@ -306,11 +273,16 @@ func show_decision(pend: Dictionary) -> void:
 		return
 	waiting_label.text = ""
 	var p: Dictionary = engine.players[pend["p"]]
-	decision_panel.visible = true
+	var pt := String(pend["type"])
+	if pt != "turn":
+		var icons := {"jail": "jail", "train": "turn", "buy": "land", "build": "house", "takeover": "gavel", "festival": "star",
+			"lottery": "dice", "market": "specialty", "card_confirm": "card", "card_player": "card", "card_tile": "card"}
+		decision_popup.open_popup("", icons.get(pt, "turn"), UiPopup.Variant.BAD if pt == "jail" else UiPopup.Variant.NORMAL)
+		if pt == "jail":
+			notify.cancel_tag("jail")
 	decision_desc.text = ""
 	match String(pend["type"]):
 		"turn":
-			decision_panel.visible = false
 			show_roll(p)
 		"jail":
 			decision_title.text = "Bạn đang Kẹt Xe"
@@ -488,8 +460,7 @@ func _pop_roll_area() -> void:
 
 
 func _open_panel(title: String) -> void:
-	decision_panel.visible = true
-	decision_title.text = title
+	decision_popup.open_popup(title, "card")
 	roll_area.visible = false
 
 
@@ -512,37 +483,10 @@ func set_focus(on: bool) -> void:
 		info_panel.visible = false
 
 
-# ---------------------------------------------------------------- banner thông tin ô / kết thúc lượt
+# ---------------------------------------------------------------- thông báo nhanh (đi qua NotifyQueue)
 
-func _build_banner() -> void:
-	banner = PanelContainer.new()
-	banner.add_theme_stylebox_override("panel", _style(Color("#3e2723", 0.92), 14, Color("#ffca28")))
-	_anchor(banner, Control.PRESET_CENTER_TOP, -260, 56, 260, 120)
-	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(banner)
-	banner_label = Label.new()
-	banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	banner_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	banner_label.add_theme_color_override("font_color", Color("#fff8e1"))
-	banner_label.add_theme_font_size_override("font_size", 17)
-	banner.add_child(banner_label)
-	banner.visible = false
-
-
-func show_banner(text: String, duration: float = 2.0) -> void:
-	banner_label.text = text
-	banner.visible = true
-	banner.modulate.a = 0.0
-	banner.pivot_offset = banner.size / 2.0
-	banner.scale = Vector2.ONE * 0.85
-	if _banner_tw and _banner_tw.is_valid():
-		_banner_tw.kill()
-	_banner_tw = create_tween()
-	_banner_tw.tween_property(banner, "modulate:a", 1.0, 0.15)
-	_banner_tw.parallel().tween_property(banner, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
-	_banner_tw.tween_interval(duration)
-	_banner_tw.tween_property(banner, "modulate:a", 0.0, 0.3)
-	_banner_tw.tween_callback(func(): banner.visible = false)
+func show_banner(text: String, duration: float = 2.0, tag: String = "") -> void:
+	notify.push(text, _kind_of(text), duration, tag)
 
 
 ## Dòng tóm tắt ô vừa đáp xuống.
@@ -627,10 +571,7 @@ func _show_tile_picker(tiles: Array, cb: Callable) -> void:
 
 
 func _add_btn(text: String, action: Dictionary, primary: bool = false) -> void:
-	var b := _button(text, func(): _emit(action))
-	if primary:
-		b.add_theme_color_override("font_color", Color("#ffca28"))
-	decision_buttons.add_child(b)
+	decision_popup.add_action(text, func(): _emit(action), "primary" if primary else "")
 
 
 func _emit(action: Dictionary) -> void:
@@ -643,41 +584,51 @@ func _emit(action: Dictionary) -> void:
 func show_game_over(ev: Dictionary) -> void:
 	clear_decision()
 	waiting_label.text = ""
-	over_panel = PanelContainer.new()
-	over_panel.add_theme_stylebox_override("panel", _style(Color("#3e2723", 0.95), 16, Color("#ffca28")))
-	_anchor(over_panel, Control.PRESET_CENTER, -240, -180, 240, 180)
-	root.add_child(over_panel)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	over_panel.add_child(v)
-	var title := Label.new()
+	var pal := UiPalette.get_default()
+	over_popup = UiPopup.new()
+	over_popup.width = 520
+	root.add_child(over_popup)
 	var win_name: String = engine.players[ev["winner"]]["name"]
 	var reasons := {"last": "Người cuối cùng trụ lại", "domination": "Bá Chủ Ba Miền", "rounds": "Giàu nhất khi hết vòng"}
-	title.text = "%s CHIẾN THẮNG!" % win_name.to_upper()
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color("#ffca28"))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(title)
-	var sub := Label.new()
-	sub.text = reasons.get(ev["reason"], "")
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_color_override("font_color", Color("#fff8e1"))
-	v.add_child(sub)
+	over_popup.open_popup("%s CHIẾN THẮNG!" % win_name.to_upper(), "star", UiPopup.Variant.GOOD)
+	over_popup.title_label.add_theme_font_size_override("font_size", pal.font_big - 6)
+	over_popup.set_desc(reasons.get(ev["reason"], ""))
+	# Xuất hiện ở giữa màn hình (bảng kết quả quan trọng nhất ván)
+	over_popup.set_anchors_preset(Control.PRESET_CENTER)
+	over_popup.offset_left = -over_popup.width / 2.0
+	over_popup.offset_right = over_popup.width / 2.0
+	over_popup.offset_top = -170
+	over_popup.offset_bottom = -170
+	over_popup.grow_vertical = Control.GROW_DIRECTION_END
 	var ranking: Array = ev["ranking"]
 	var worths: Array = ev["worths"]
 	for i in ranking.size():
 		var pid: int = ranking[i]
-		var l := Label.new()
+		var row := PanelContainer.new()
+		row.theme_type_variation = "SubPanel"
+		over_popup.body.add_child(row)
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 10)
+		row.add_child(h)
+		var dot := ColorRect.new()
+		dot.color = Color(colors[pid])
+		dot.custom_minimum_size = Vector2(8, 0)
+		h.add_child(dot)
+		var n := Label.new()
+		n.text = "%d. %s" % [i + 1, engine.players[pid]["name"]]
+		n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if i == 0:
+			n.add_theme_font_override("font", UiTheme.bold_font())
+		h.add_child(n)
 		var w: int = worths[i]
-		l.text = "%d. %s — %s" % [i + 1, engine.players[pid]["name"], (BoardData.money(w) + " xu") if w > 0 else "Phá sản"]
-		l.add_theme_color_override("font_color", Color(colors[pid]).lightened(0.3))
-		v.add_child(l)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 16)
-	v.add_child(row)
-	row.add_child(_button("Chơi lại", func(): restart_requested.emit()))
-	row.add_child(_button("Về menu", func(): menu_requested.emit()))
+		var m := Label.new()
+		m.theme_type_variation = "MoneyLabel" if w > 0 else ""
+		m.text = (BoardData.money(w) + " xu") if w > 0 else "Phá sản"
+		if w <= 0:
+			m.add_theme_color_override("font_color", pal.danger)
+		h.add_child(m)
+	over_popup.add_action("Chơi lại", func(): restart_requested.emit(), "primary")
+	over_popup.add_action("Về sảnh", func(): menu_requested.emit())
 
 
 # ---------------------------------------------------------------- tiện ích
@@ -769,26 +720,6 @@ func _button(text: String, cb: Callable) -> Button:
 	b.pressed.connect(func(): Audio.play("click"))
 	b.pressed.connect(cb)
 	return b
-
-
-func _style(bg: Color, radius: int, border: Color = Color.TRANSPARENT, border_left: int = -1) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg
-	s.set_corner_radius_all(radius)
-	s.content_margin_left = 12
-	s.content_margin_right = 12
-	s.content_margin_top = 8
-	s.content_margin_bottom = 8
-	if border.a > 0:
-		if border_left >= 0:
-			s.border_width_left = maxi(border_left, 6)
-			s.border_width_top = 0 if border_left == 0 else 2
-			s.border_width_bottom = 0 if border_left == 0 else 2
-			s.border_width_right = 0 if border_left == 0 else 2
-		else:
-			s.set_border_width_all(2)
-		s.border_color = border
-	return s
 
 
 static func _round5(v: float) -> int:

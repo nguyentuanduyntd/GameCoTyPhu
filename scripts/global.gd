@@ -33,6 +33,8 @@ func _ready() -> void:
 			buy_fx = clampi(int(arg.substr(8)), 0, 2)
 		if arg.begins_with("--cinematic="):
 			cinematic = clampi(int(arg.substr(12)), 0, 2)
+		if arg.begins_with("--rounds="):   # kiểm thử: ván ngắn để xem màn kết thúc
+			max_rounds = maxi(1, int(arg.substr(9)))
 	apply_settings()
 	# Theme gốc cho toàn bộ giao diện: gộp vào theme mặc định của Godot để mọi Control
 	# (kể cả nằm dưới CanvasLayer — vốn không kế thừa theme của cửa sổ) đều dùng chung

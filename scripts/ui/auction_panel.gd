@@ -35,16 +35,7 @@ func setup(engine: GameEngine, colors: Array, human: int) -> void:
 
 
 func _build() -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#3e2723", 0.95)
-	sb.set_corner_radius_all(16)
-	sb.border_color = Color("#ffca28")
-	sb.set_border_width_all(3)
-	sb.shadow_color = Color(0, 0, 0, 0.45)
-	sb.shadow_size = 12
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 16)
-	add_theme_stylebox_override("panel", sb)
+	theme_type_variation = "WoodPanel"
 	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	offset_left = -360
 	offset_right = 360
@@ -56,7 +47,8 @@ func _build() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	add_child(v)
-	_title = _label(26, Color("#ffca28"))
+	_title = _label(26, UiPalette.get_default().gold)
+	_title.add_theme_font_override("font", UiTheme.bold_font())
 	v.add_child(_title)
 	_list_label = _label(15, Color("#d7ccc8"))
 	v.add_child(_list_label)
@@ -89,7 +81,7 @@ func _build() -> void:
 	bg.bg_color = Color(0, 0, 0, 0.4)
 	bg.set_corner_radius_all(5)
 	var fg := StyleBoxFlat.new()
-	fg.bg_color = Color("#ffca28")
+	fg.bg_color = UiPalette.get_default().gold
 	fg.set_corner_radius_all(5)
 	_timer_bar.add_theme_stylebox_override("background", bg)
 	_timer_bar.add_theme_stylebox_override("fill", fg)
@@ -186,14 +178,14 @@ func prompt(pend: Dictionary, seconds: float) -> void:
 	for k in range(1, max_steps + 1):
 		var price := AuctionRules.price_for(a, k)
 		var txt := ("Trả %s" % BoardData.money(price)) if int(pend["leader"]) < 0 and k == 1 else ("Trả +%s → %s" % [BoardData.money(int(pend["step"]) * k), BoardData.money(price)])
-		var b := _button(txt, Color("#2e7d32"))
+		var b := _button(txt, "AccentButton")
 		if not options.has(k):
 			b.disabled = true
 			b.tooltip_text = "Không đủ tiền (cần %s xu)" % BoardData.money(price)
 		else:
 			b.pressed.connect(func(): _send_bid(k))
 		_buttons.add_child(b)
-	var f := _button("Bỏ", Color("#8d1b1b"))
+	var f := _button("Bỏ", "PrimaryButton")
 	f.pressed.connect(_send_fold)
 	_buttons.add_child(f)
 	_time_total = seconds
@@ -217,7 +209,7 @@ func _process(delta: float) -> void:
 	_timer_bar.value = 100.0 * maxf(_time_left, 0.0) / maxf(_time_total, 0.01)
 	_timer_label.text = "%ds" % ceili(maxf(_time_left, 0.0))
 	if _time_left <= 3.0:
-		(_timer_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = Color("#ff5252")
+		(_timer_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = UiPalette.get_default().danger
 	if _time_left <= 0.0:
 		_status.text = "Hết giờ — coi như bỏ."
 		_send_fold()
@@ -301,7 +293,7 @@ func _hide_timer() -> void:
 	_counting = false
 	_timer_bar.visible = false
 	_timer_label.visible = false
-	(_timer_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = Color("#ffca28")
+	(_timer_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = UiPalette.get_default().gold
 
 
 func _label(size: int, col: Color) -> Label:
@@ -313,20 +305,12 @@ func _label(size: int, col: Color) -> Label:
 	return l
 
 
-func _button(text: String, col: Color) -> Button:
+func _button(text: String, variation: String) -> Button:
 	var b := Button.new()
 	b.text = text
+	b.theme_type_variation = variation
 	b.custom_minimum_size = Vector2(0, 46)
 	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", 17)
-	for st in ["normal", "hover", "pressed", "disabled"]:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = {"normal": col, "hover": col.lightened(0.15), "pressed": col.darkened(0.2), "disabled": Color(0.3, 0.3, 0.3)}[st]
-		sb.set_corner_radius_all(12)
-		sb.border_color = Color("#ffca28") if st != "disabled" else Color(0.45, 0.45, 0.45)
-		sb.set_border_width_all(2)
-		sb.content_margin_left = 14
-		sb.content_margin_right = 14
-		b.add_theme_stylebox_override(st, sb)
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	b.pressed.connect(func(): Audio.play("click"))
 	return b
