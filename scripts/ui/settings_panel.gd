@@ -6,14 +6,6 @@ signal closed
 
 
 func _ready() -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#fff8e1")
-	sb.set_corner_radius_all(16)
-	sb.border_color = Color("#b71c1c")
-	sb.set_border_width_all(3)
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 22)
-	add_theme_stylebox_override("panel", sb)
 	set_anchors_preset(Control.PRESET_CENTER)
 	offset_left = -230
 	offset_right = 230
@@ -28,8 +20,7 @@ func _ready() -> void:
 	var title := Label.new()
 	title.text = "CÀI ĐẶT"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 26)
-	title.add_theme_color_override("font_color", Color("#b71c1c"))
+	title.theme_type_variation = "TitleLabel"
 	v.add_child(title)
 
 	v.add_child(_slider_row("Nhạc nền", Global.music_volume, func(val):
@@ -92,6 +83,7 @@ func _ready() -> void:
 	var close := Button.new()
 	close.text = "Đóng"
 	close.custom_minimum_size = Vector2(0, 44)
+	close.theme_type_variation = "PrimaryButton"
 	close.pressed.connect(func():
 		Audio.play("click")
 		closed.emit()
@@ -125,9 +117,6 @@ func _check(text: String, on: bool, cb: Callable) -> CheckBox:
 	var c := CheckBox.new()
 	c.text = text
 	c.button_pressed = on
-	c.add_theme_color_override("font_color", Color("#3e2723"))
-	c.add_theme_color_override("font_pressed_color", Color("#3e2723"))
-	c.add_theme_color_override("font_hover_color", Color("#b71c1c"))
 	c.toggled.connect(cb)
 	return c
 
@@ -135,6 +124,5 @@ func _check(text: String, on: bool, cb: Callable) -> CheckBox:
 func _label(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_color_override("font_color", Color("#3e2723"))
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return l

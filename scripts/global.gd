@@ -34,6 +34,13 @@ func _ready() -> void:
 		if arg.begins_with("--cinematic="):
 			cinematic = clampi(int(arg.substr(12)), 0, 2)
 	apply_settings()
+	# Theme gốc cho toàn bộ giao diện: gộp vào theme mặc định của Godot để mọi Control
+	# (kể cả nằm dưới CanvasLayer — vốn không kế thừa theme của cửa sổ) đều dùng chung
+	var t := UiTheme.get_theme()
+	ThemeDB.get_default_theme().merge_with(t)
+	ThemeDB.get_default_theme().default_font = t.default_font
+	ThemeDB.get_default_theme().default_font_size = t.default_font_size
+	ThemeDB.fallback_font_size = t.default_font_size
 
 
 func load_settings() -> void:

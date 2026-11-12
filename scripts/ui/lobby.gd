@@ -212,9 +212,6 @@ func _build_ui() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var th := Theme.new()
-	th.default_font_size = 17
-	root.theme = th
 	_ui.add_child(root)
 
 	# Nút cài đặt góc phải
@@ -228,14 +225,6 @@ func _build_ui() -> void:
 
 	# Bảng dưới cùng
 	var panel := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#fff8e1", 0.96)
-	sb.set_corner_radius_all(16)
-	sb.border_color = Color("#ffca28")
-	sb.set_border_width_all(3)
-	for side in ["left", "right", "top", "bottom"]:
-		sb.set("content_margin_" + side, 16)
-	panel.add_theme_stylebox_override("panel", sb)
 	panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	panel.offset_left = -470
 	panel.offset_right = 470
@@ -261,13 +250,11 @@ func _build_ui() -> void:
 	pick.add_child(mid)
 	_char_title = Label.new()
 	_char_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_char_title.add_theme_font_size_override("font_size", 24)
-	_char_title.add_theme_color_override("font_color", Color("#b71c1c"))
+	_char_title.theme_type_variation = "TitleLabel"
 	mid.add_child(_char_title)
 	_char_desc = Label.new()
 	_char_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_char_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_char_desc.add_theme_color_override("font_color", Color("#3e2723"))
 	mid.add_child(_char_desc)
 	var nxt := _button("  ▶  ", func(): _cycle_character(1))
 	nxt.add_theme_font_size_override("font_size", 22)
@@ -323,6 +310,7 @@ func _build_ui() -> void:
 	v.add_child(play_row)
 	var start := _button("CHƠI VỚI MÁY", _on_start)
 	start.custom_minimum_size = Vector2(300, 54)
+	start.theme_type_variation = "PrimaryButton"
 	start.add_theme_font_size_override("font_size", 24)
 	play_row.add_child(start)
 	for t in ["Tạo phòng", "Nhập mã phòng", "Ghép trận", "Leo hạng"]:
@@ -386,7 +374,6 @@ func _button(text: String, cb: Callable) -> Button:
 func _label(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_color_override("font_color", Color("#3e2723"))
 	return l
 
 
