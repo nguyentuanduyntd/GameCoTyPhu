@@ -98,7 +98,7 @@
 1. Tung 2 xúc xắc (animation vật lý 3D, kết quả do server/logic quyết định).
 2. Đi quân, xử lý ô dừng.
 3. Tung đôi → được tung tiếp; 3 lần đôi liên tiếp → vào Kẹt Xe.
-4. Giới hạn thời gian mỗi lượt khi chơi online (ví dụ 20 giây; hết giờ → AI tự xử lý).
+4. Giới hạn thời gian mỗi lượt khi chơi online (chủ phòng chọn 15/30/60 giây, đấu giá 12 giây; đồng hồ chỉ chạy khi mọi máy đã diễn xong). Hết giờ → bỏ lượt / phương án an toàn (không mua, không xây, bỏ đấu giá); 3 lần liên tiếp → bị loại. Rớt mạng: tự vào lại đúng chỗ, lúc vắng mỗi lượt chỉ chờ 5 giây.
 
 ### 3.1b. Trình diễn lượt chơi (camera điện ảnh)
 
@@ -433,7 +433,7 @@ data/        Bảng giá ô đất, thẻ Cơ Hội, nhân vật, mùa (JSON/Res
 | M1 ✅ | Core luật chơi + bot AI + bàn cờ 3D đơn giản | **Chơi với máy được (bản thô)** |
 | M2 ✅ | Bàn cờ 3D: bản đồ Việt Nam giữa bàn (cờ chủ sở hữu theo tỉnh, có Hoàng Sa, Trường Sa), 8 nhân vật chibi theo nghề, 34 danh thắng (11 kiểu dáng), hiệu ứng mùa/bão/cúp điện/pháo hoa Tết, camera tự xoay theo lượt, bấm ô xem thông tin | Ván chơi đẹp mắt |
 | M3 ✅ | Sảnh 3D kiểu đình làng (nhân vật đứng hàng ngang trên bục, đổi nhân vật ◀ ▶, bốc lại đối thủ), 18 hiệu ứng âm thanh + 3 bản nhạc ngũ cung tự tổng hợp, bảng cài đặt lưu trên máy | Bản offline hoàn chỉnh |
-| M4 | Server: tạo phòng bằng mã, ghép trận | Chơi online với bạn bè |
+| M4 🔶 | Server Godot headless (WebSocket, lockstep + server kiểm tra từng nước), phòng bằng mã 6 ký tự, chủ phòng thêm máy, đồng hồ/hết giờ/xử thua, vào lại khi rớt mạng, Cloudflare Tunnel miễn phí ✅ · ghép trận ngẫu nhiên (đợt 2) | Chơi online với bạn bè |
 | M5 | Tài khoản, leo hạng, bảng xếp hạng | Leo hạng |
 | M6 | Tối ưu mobile, xuất bản Windows + Android, cân bằng | Bản phát hành |
 
