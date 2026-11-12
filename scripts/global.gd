@@ -28,6 +28,9 @@ const QUALITY_NAMES := ["Thấp", "Vừa", "Cao"]
 
 
 func _ready() -> void:
+	if OS.get_cmdline_user_args().has("--server"):
+		# chạy làm server online: bỏ sảnh, sang cảnh server (xem scripts/net/server_main.gd)
+		get_tree().change_scene_to_file.call_deferred("res://scenes/server.tscn")
 	load_settings()
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--bots="):

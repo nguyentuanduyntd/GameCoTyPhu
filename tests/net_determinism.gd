@@ -23,7 +23,7 @@ func _initialize() -> void:
 	var finished := 0
 	var t0 := Time.get_ticks_msec()
 	for g in games:
-		var n := 3 + g % 4
+		var n := 2 + g % 5
 		var cfg: Array = []
 		for i in n:
 			cfg.append({"name": "P%d" % i, "character": CHARS[(g * 5 + i * 3) % CHARS.size()], "is_bot": true, "difficulty": (g + i) % 3})
