@@ -32,9 +32,12 @@ func _ready() -> void:
 func roll(values: Array, speed: float = 1.0) -> void:
 	var dur := 0.75 / speed
 	var tw := create_tween().set_parallel(true)
-	for i in 2:
+	var count := values.size()
+	dice[1].visible = count > 1
+	for i in count:
 		var d: Node3D = dice[i]
-		var target := REST + Vector3(-0.55 + i * 1.1 + rng.randf_range(-0.15, 0.15), SIZE / 2 + 0.08, rng.randf_range(-0.2, 0.2))
+		var x := 0.0 if count == 1 else -0.55 + i * 1.1
+		var target := REST + Vector3(x + rng.randf_range(-0.15, 0.15), SIZE / 2 + 0.08, rng.randf_range(-0.2, 0.2))
 		d.position = target + Vector3(rng.randf_range(-1.5, 1.5), 3.5, 2.0)
 		var final_rot := _face_up_basis(int(values[i]), rng.randf() * TAU).get_euler()
 		var spin := Vector3(TAU * rng.randi_range(2, 3), TAU * rng.randi_range(1, 2), TAU * rng.randi_range(2, 3))

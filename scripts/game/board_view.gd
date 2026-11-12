@@ -6,9 +6,9 @@ const W := 1.2   # bề ngang ô cạnh
 const C := 2.0   # cạnh ô góc
 const D := 2.0   # chiều sâu ô cạnh
 const TILE_Y := 0.1
-const H := (2.0 * C + 11.0 * W) / 2.0
+const H := (2.0 * C + 12.0 * W) / 2.0
 
-const CORNER_COLORS := {0: "#ffe082", 12: "#ef9a9a", 24: "#f48fb1", 36: "#90caf9"}
+const CORNER_COLORS := {0: "#ffe082", 13: "#ef9a9a", 26: "#f48fb1", 39: "#90caf9"}
 const SEASON_GROUND := ["#9ccc65", "#7cb342", "#c0ca33", "#90a4ae"]
 
 var tile_xforms: Array = []
@@ -21,6 +21,7 @@ var festival_marker: Node3D
 var center_ground: MeshInstance3D
 var season_label: Label3D
 var season_event_label: Label3D
+var pot_label: Label3D
 var player_colors: Array = []
 var _mat_cache := {}
 
@@ -39,35 +40,27 @@ func build(colors: Array) -> void:
 # ---------------------------------------------------------------- vị trí
 
 func tile_transform(i: int) -> Transform3D:
+	var side: int = i / BoardData.SIDE
+	var k: int = i % BoardData.SIDE
 	var pos := Vector3.ZERO
 	var yaw := 0.0
-	if i == 0:
-		pos = Vector3(H - C / 2, 0, H - C / 2)
-	elif i < 12:
-		pos = Vector3(H - C - W * (i - 0.5), 0, H - D / 2)
-	elif i == 12:
-		pos = Vector3(-H + C / 2, 0, H - C / 2)
-		yaw = -PI / 2
-	elif i < 24:
-		pos = Vector3(-H + D / 2, 0, H - C - W * (i - 12 - 0.5))
-		yaw = -PI / 2
-	elif i == 24:
-		pos = Vector3(-H + C / 2, 0, -H + C / 2)
-		yaw = PI
-	elif i < 36:
-		pos = Vector3(-H + C + W * (i - 24 - 0.5), 0, -H + D / 2)
-		yaw = PI
-	elif i == 36:
-		pos = Vector3(H - C / 2, 0, -H + C / 2)
-		yaw = PI / 2
-	else:
-		pos = Vector3(H - D / 2, 0, -H + C + W * (i - 36 - 0.5))
-		yaw = PI / 2
+	match side:
+		0:
+			pos = Vector3(H - C / 2, 0, H - C / 2) if k == 0 else Vector3(H - C - W * (k - 0.5), 0, H - D / 2)
+		1:
+			pos = Vector3(-H + C / 2, 0, H - C / 2) if k == 0 else Vector3(-H + D / 2, 0, H - C - W * (k - 0.5))
+			yaw = -PI / 2
+		2:
+			pos = Vector3(-H + C / 2, 0, -H + C / 2) if k == 0 else Vector3(-H + C + W * (k - 0.5), 0, -H + D / 2)
+			yaw = PI
+		_:
+			pos = Vector3(H - C / 2, 0, -H + C / 2) if k == 0 else Vector3(H - D / 2, 0, -H + C + W * (k - 0.5))
+			yaw = PI / 2
 	return Transform3D(Basis(Vector3.UP, yaw), pos)
 
 
 func is_corner(i: int) -> bool:
-	return i % 12 == 0
+	return i % BoardData.SIDE == 0
 
 
 func tile_center(i: int) -> Vector3:
@@ -142,8 +135,14 @@ func _build_tile(i: int) -> void:
 	var face_color := "#fbf3e0"
 	if corner:
 		face_color = CORNER_COLORS[i]
-	elif ty == BoardData.T.CHANCE:
+	elif ty == BoardData.T.CO_HOI:
 		face_color = "#fff3c4"
+	elif ty == BoardData.T.KHI_VAN:
+		face_color = "#d6ecff"
+	elif ty == BoardData.T.TOLL:
+		face_color = "#ffe0b2"
+	elif ty == BoardData.T.CHARITY:
+		face_color = "#ffd6dc"
 	elif ty == BoardData.T.INFRA:
 		face_color = "#e3e7ea"
 	elif ty == BoardData.T.TAX or ty == BoardData.T.MARKET or ty == BoardData.T.LOTTERY:
@@ -173,10 +172,14 @@ func _build_tile(i: int) -> void:
 	info_labels.append(info)
 	if BoardData.is_property(i):
 		info.text = BoardData.money(td["price"])
-	elif ty == BoardData.T.CHANCE:
-		info.text = "?"
-		info.font_size = 60
+	elif ty == BoardData.T.CO_HOI or ty == BoardData.T.KHI_VAN:
+		info.text = "?" if ty == BoardData.T.CO_HOI else "!"
+		info.font_size = 70
 		info.position.z = 0.45
+		info.modulate = Color("#e65100") if ty == BoardData.T.CO_HOI else Color("#1565c0")
+	elif ty == BoardData.T.CHARITY:
+		info.text = "Quỹ: 0"
+		pot_label = info
 	elif ty == BoardData.T.TAX:
 		info.text = "10% tài sản"
 
@@ -213,6 +216,33 @@ func _build_tile(i: int) -> void:
 
 	if corner:
 		_decorate_corner(i, root)
+	elif ty == BoardData.T.TOLL:
+		var post := _box(Vector3(0.12, 0.35, 0.12), "#424242")
+		post.position = Vector3(-0.42, 0.27, -0.55)
+		root.add_child(post)
+		for k in 4:
+			var seg := _box(Vector3(0.2, 0.06, 0.06), "#e53935" if k % 2 == 0 else "#fafafa")
+			seg.position = Vector3(-0.28 + k * 0.2, 0.4, -0.55)
+			root.add_child(seg)
+	elif ty == BoardData.T.CHARITY:
+		var jar := MeshInstance3D.new()
+		var jm := CylinderMesh.new()
+		jm.top_radius = 0.16
+		jm.bottom_radius = 0.22
+		jm.height = 0.38
+		jar.mesh = jm
+		jar.position = Vector3(0, 0.3, -0.55)
+		jar.material_override = _mat("#8d6e63")
+		root.add_child(jar)
+		var coin := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.14
+		cm.bottom_radius = 0.14
+		cm.height = 0.05
+		coin.mesh = cm
+		coin.position = Vector3(0, 0.52, -0.55)
+		coin.material_override = _mat("#ffca28", true)
+		root.add_child(coin)
 
 
 func _decorate_corner(i: int, root: Node3D) -> void:
@@ -225,14 +255,14 @@ func _decorate_corner(i: int, root: Node3D) -> void:
 			var cap := _box(Vector3(0.37, 0.2, 0.22), "#e53935")
 			cap.position = Vector3(-0.55, 0.85, -0.45)
 			root.add_child(cap)
-		12:
+		13:
 			# Mấy chiếc xe kẹt cứng
 			var cols := ["#1e88e5", "#fdd835", "#43a047", "#8e24aa"]
 			for k in 4:
 				var car := _box(Vector3(0.22, 0.14, 0.42), cols[k])
 				car.position = Vector3(-0.6 + k * 0.4, 0.2, -0.55 + (k % 2) * 0.15)
 				root.add_child(car)
-		24:
+		26:
 			# Đèn lồng
 			for k in 3:
 				var l := MeshInstance3D.new()
@@ -243,7 +273,7 @@ func _decorate_corner(i: int, root: Node3D) -> void:
 				l.material_override = _mat("#e53935", true)
 				l.position = Vector3(-0.5 + k * 0.5, 0.6, -0.55)
 				root.add_child(l)
-		36:
+		39:
 			# Đoàn tàu
 			for k in 3:
 				var car := _box(Vector3(0.5, 0.25, 0.28), "#1565c0" if k == 0 else "#90a4ae")
@@ -353,6 +383,11 @@ func update_info(engine: GameEngine) -> void:
 		else:
 			lbl.text = BoardData.money(BoardData.tile(t)["price"])
 			lbl.modulate = Color("#5d4037")
+
+
+func set_pot(amount: int) -> void:
+	if pot_label != null:
+		pot_label.text = "Quỹ: " + BoardData.money(amount)
 
 
 func set_festival(t: int) -> void:

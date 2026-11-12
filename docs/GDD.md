@@ -1,6 +1,6 @@
-# TỶ PHÚ ĐẤT VIỆT — Bản thiết kế game (GDD v0.2)
+# TỶ PHÚ ĐẤT VIỆT — Bản thiết kế game (GDD v0.3)
 
-> Đã chốt ngày 12/11/2026: tên game, bàn 34 tỉnh / 48 ô, bỏ đấu giá, có thâu tóm, giới hạn vòng, bật kỹ năng nhân vật, làm bản chơi với máy trước.
+> Đã chốt ngày 12/11/2026: tên game, bàn 34 tỉnh / 52 ô, bỏ đấu giá, có thâu tóm, giới hạn vòng, bật kỹ năng nhân vật, làm bản chơi với máy trước. Bổ sung: Kẹt Xe 3 cách thoát + CSGT phân luồng, Trạm BOT, Quỹ Từ Thiện, Đụng độ, 2 bộ thẻ Khí Vận / Cơ Hội, đơn vị tiền "xu".
 > Ngày: 12/11/2026
 
 ---
@@ -27,11 +27,12 @@
 
 ---
 
-## 2. Bàn cờ — 48 ô
+## 2. Bàn cờ — 52 ô
 
-- 4 góc + 44 ô cạnh (11 ô mỗi cạnh).
-- 34 ô tỉnh/thành + 4 ô Hạ Tầng + 3 ô Cơ Hội + 1 Thuế + 1 Chợ Phiên + 1 Xổ Số Kiến Thiết.
+- 4 góc + 48 ô cạnh (12 ô mỗi cạnh).
+- 34 ô tỉnh/thành + 14 ô đặc biệt: 4 Hạ Tầng, 3 Khí Vận, 2 Cơ Hội, 1 Thuế, 1 Trạm BOT, 1 Quỹ Từ Thiện, 1 Chợ Phiên, 1 Xổ Số Kiến Thiết.
 - Đi theo chiều **Bắc → Nam**, giá đất tăng dần, cuối hành trình là nhóm Siêu Đô Thị.
+- Đơn vị tiền: **xu**.
 
 ### 2.1. 10 nhóm vùng (thay cho "nhóm màu")
 
@@ -54,35 +55,42 @@
 
 | Ô | Nội dung | Ô | Nội dung | Ô | Nội dung | Ô | Nội dung |
 |---|---|---|---|---|---|---|---|
-| **0** | **KHỞI HÀNH – Km0** | **12** | **KẸT XE** | **24** | **LỄ HỘI** | **36** | **TÀU THỐNG NHẤT** |
-| 1 | Lai Châu | 13 | Phú Thọ | 25 | Hà Tĩnh | 37 | Khánh Hòa |
-| 2 | Điện Biên | 14 | Bắc Ninh | 26 | Quảng Trị | 38 | Tây Ninh |
-| 3 | Cơ Hội | 15 | Chợ Phiên | 27 | Xổ Số Kiến Thiết | 39 | Đồng Nai |
-| 4 | Sơn La | 16 | Hưng Yên | 28 | Huế | 40 | Cà Mau |
-| 5 | Cao Bằng | 17 | Ninh Bình | 29 | Đà Nẵng | 41 | An Giang |
-| 6 | Bến Xe Khách (Hạ tầng) | 18 | Ga Đường Sắt (Hạ tầng) | 30 | Cảng Biển (Hạ tầng) | 42 | Sân Bay (Hạ tầng) |
-| 7 | Lạng Sơn | 19 | Hải Phòng | 31 | Quảng Ngãi | 43 | Đồng Tháp |
-| 8 | Tuyên Quang | 20 | Cơ Hội | 32 | Gia Lai | 44 | Vĩnh Long |
-| 9 | Thuế | 21 | Quảng Ninh | 33 | Cơ Hội | 45 | Cần Thơ |
-| 10 | Lào Cai | 22 | Thanh Hóa | 34 | Đắk Lắk | 46 | Hà Nội |
-| 11 | Thái Nguyên | 23 | Nghệ An | 35 | Lâm Đồng | 47 | TP. Hồ Chí Minh |
+| **0** | **KHỞI HÀNH KM 0** | **13** | **KẸT XE** | **26** | **LỄ HỘI** | **39** | **TÀU THỐNG NHẤT** |
+| 1 | Lai Châu | 14 | Phú Thọ | 27 | Hà Tĩnh | 40 | Khánh Hòa |
+| 2 | Điện Biên | 15 | Bắc Ninh | 28 | Quảng Trị | 41 | Tây Ninh |
+| 3 | Khí Vận | 16 | Chợ Phiên | 29 | Xổ Số Kiến Thiết | 42 | Đồng Nai |
+| 4 | Sơn La | 17 | Hưng Yên | 30 | Huế | 43 | Khí Vận |
+| 5 | Cao Bằng | 18 | Ninh Bình | 31 | Đà Nẵng | 44 | Cà Mau |
+| 6 | Bến Xe Khách (Hạ tầng) | 19 | Ga Đường Sắt (Hạ tầng) | 32 | Cảng Biển (Hạ tầng) | 45 | An Giang |
+| 7 | Lạng Sơn | 20 | Hải Phòng | 33 | Quảng Ngãi | 46 | Sân Bay (Hạ tầng) |
+| 8 | Tuyên Quang | 21 | Khí Vận | 34 | Gia Lai | 47 | Đồng Tháp |
+| 9 | Thuế | 22 | Quảng Ninh | 35 | Cơ Hội | 48 | Vĩnh Long |
+| 10 | Lào Cai | 23 | Thanh Hóa | 36 | Đắk Lắk | 49 | Cần Thơ |
+| 11 | Thái Nguyên | 24 | Trạm BOT (thu phí khi đi qua) | 37 | Lâm Đồng | 50 | Hà Nội |
+| 12 | Cơ Hội | 25 | Nghệ An | 38 | Quỹ Từ Thiện | 51 | TP. Hồ Chí Minh |
 
 ### 2.3. Ô góc
 
-- **Khởi Hành – Km0**: đi qua nhận lương; dừng đúng ô nhận gấp đôi.
-- **Kẹt Xe** (thay nhà tù): bị kẹt tối đa 3 lượt. Thoát bằng: tung đôi, trả "phí xe ôm", hoặc dùng thẻ. Trong lúc kẹt vẫn thu tiền thuê bình thường.
-- **Lễ Hội**: chọn 1 tỉnh của mình tổ chức lễ hội → tiền thuê ×2 đến khi có lễ hội mới (chỉ 1 lễ hội tồn tại trên bàn).
-- **Tàu Thống Nhất**: trả vé, lượt sau được chọn đi thẳng tới bất kỳ ô nào (đi qua Km0 vẫn nhận lương).
+- **Khởi Hành – Km 0**: đi qua nhận lương; dừng đúng ô nhận gấp đôi.
+- **Kẹt Xe** (ô tù, ô 13): bị kẹt khi dừng ở đây, tung đôi 3 lần liên tiếp, hoặc rút thẻ "Bị gọi lên xã". Mỗi lượt kẹt chọn 1 trong 3 cách:
+  1. **Tung tìm đôi**: ra đôi thì thoát và đi luôn. Trượt thì tính 1 lần.
+  2. **Gọi xe ôm**: trả 100 (Anh Ba Xe Ôm trả 50, tiền vào Quỹ Từ Thiện), thoát rồi tung đi như thường.
+  3. **Đi đường tắt**: tung 1 viên, ra chẵn thì thoát rồi tung đi như thường; ra lẻ thì lạc đường, kẹt thêm 1 lượt (không tính vào số lần trượt).
+  - **CSGT phân luồng**: tung tìm đôi trượt đủ 2 lần thì được thoát miễn phí, đi theo kết quả lần tung đó.
+  - Trong lúc kẹt vẫn thu tiền thuê bình thường.
+- **Lễ Hội**: chọn 1 tỉnh của mình tổ chức lễ hội; tiền thuê ở đó ×2 cho đến khi có lễ hội mới (cả bàn chỉ có 1 lễ hội).
+- **Tàu Thống Nhất**: lượt sau trả vé 100 để đi thẳng tới bất kỳ ô nào (đi qua Km 0 vẫn nhận lương).
 
 ### 2.4. Ô đặc biệt khác
 
-- **Hạ tầng (4 ô)**: mua được; tiền thuê tăng theo số ô hạ tầng sở hữu (1/2/3/4). Không xây nhà.
-- **Cơ Hội**: rút thẻ ngẫu nhiên (bộ thẻ tự viết, ~30 thẻ). Ví dụ: "Trúng mùa vải thiều +…", "Bị phạt nguội…", "Đi Tàu Thống Nhất miễn phí", "Xây miễn phí 1 cấp".
-- **Thuế**: nộp % tổng tài sản hoặc số cố định (chọn cái nhỏ hơn).
-- **Chợ Phiên**: đổi bộ đặc sản lấy Thẻ Kỹ Năng, hoặc mua 1 đặc sản ngẫu nhiên.
-- **Xổ Số Kiến Thiết**: mini-game: đặt cược, chọn 1 số 1–6, tung xúc xắc; trúng ×5.
-
----
+- **Hạ tầng (4 ô)**: mua được; tiền thuê tăng theo số ô hạ tầng sở hữu: 50 / 100 / 200 / 400. Không xây nhà.
+- **Trạm BOT (ô 24)**: ai **đi ngang qua** cũng mất 30. Ô này mua được với giá 150: có chủ thì tiền vào túi chủ, chưa có chủ thì tiền vào Quỹ Từ Thiện. Dừng đúng trạm của người khác thì trả 90. Đi Tàu Thống Nhất hoặc Chuyến xe miễn phí thì không mất phí.
+- **Quỹ Từ Thiện (ô 38)**: mọi tiền thuế, tiền phạt, phí xe ôm, phí BOT chưa có chủ đều dồn vào quỹ giữa bàn. Ai dừng ở ô này **nhận hết quỹ**.
+- **Khí Vận (3 ô)**: rút thẻ may rủi, có hiệu lực ngay (xem mục 4.5).
+- **Cơ Hội (2 ô)**: rút thẻ làm ăn, người chơi được quyết định (xem mục 4.5).
+- **Thuế**: nộp 10% tổng tài sản, tối đa 200, tiền vào Quỹ Từ Thiện. Thẻ Miễn Phạt hủy được khoản này.
+- **Chợ Phiên**: đổi bộ đặc sản lấy Thẻ Kỹ Năng, hoặc mua 1 đặc sản ngẫu nhiên giá 60.
+- **Xổ Số Kiến Thiết**: chọn 1 số từ 1 đến 6 rồi đặt cược 50 / 100 / 200; tung ra đúng số thì nhận gấp 5 tiền cược.
 
 ## 3. Luật chơi cốt lõi
 
@@ -108,7 +116,11 @@
 - Bán nhà (½ giá) / bán đất cho ngân hàng để trả nợ.
 - Không đủ trả → **phá sản**, rời ván, tài sản trả về ngân hàng.
 
-### 3.5. Điều kiện thắng
+### 3.5. Đụng độ
+
+- Dừng lại ở ô đang có người khác đứng (trừ ô Kẹt Xe) thì hai người **đấu xúc xắc 1 viên**. Ai cao hơn lấy 50 của người kia; bằng nhau thì hòa. Nếu ô có nhiều người, đấu lần lượt với từng người.
+
+### 3.6. Điều kiện thắng
 1. **Người cuối cùng còn lại** (các người khác phá sản).
 2. **Bá Chủ Ba Miền**: cùng lúc sở hữu trọn ≥ 1 nhóm miền Bắc (G1–G4), ≥ 1 nhóm miền Trung (G5–G7) và ≥ 1 nhóm miền Nam (G8–G10) → thắng ngay.
 3. **Hết giờ**: hết số vòng giới hạn (vd 25 vòng hoặc 30 phút) → xếp hạng theo **tổng tài sản**.
@@ -141,16 +153,95 @@ Mỗi khi tất cả người chơi đi xong 2 lượt → đổi mùa (Xuân �
 
 | Nhân vật | Kỹ năng nội tại |
 |---|---|
-| Anh Ba Xe Ôm | Đi Tàu Thống Nhất miễn phí; phí thoát Kẹt Xe giảm 50% |
+| Anh Ba Xe Ôm | Đi Tàu Thống Nhất và qua Trạm BOT miễn phí; phí thoát Kẹt Xe giảm 50% |
 | Cô Tư Tiểu Thương | Mua đất giảm 10% |
 | Chú Năm Thợ Hồ | Xây nhà giảm 15% |
 | Bác Hai Ngư Dân | Miễn nhiễm bão 1 lần; tỉnh ven biển +10% thuê |
 | Chị Bảy Doanh Nhân | Thâu tóm giảm 10% |
 | Bé Na Học Sinh | Rút Cơ Hội được xem 2 chọn 1 |
-| Ông Sáu Nông Dân | Mùa Thu nhận thêm lương |
-| Anh Út Nghệ Sĩ | Lễ Hội ×2,5 thay vì ×2 |
+| Ông Sáu Nông Dân | Mùa Thu qua Km 0 nhận thêm 100; tỉnh Tây Bắc, Đông Bắc, Miền Tây của ông thu thêm 15% tiền thuê |
+| Anh Út Nghệ Sĩ | Lễ Hội ×3 thay vì ×2 |
 
 > Trong Leo Hạng có thể bật "chế độ cân bằng" (tắt kỹ năng) — cần chốt.
+
+---
+
+### 4.5. Thẻ Khí Vận và Cơ Hội
+
+- **Khí Vận** là may rủi: rút xong có hiệu lực ngay. Bộ thẻ được cân bằng để trung bình mỗi lần rút có lợi khoảng +30.
+- **Cơ Hội** là lựa chọn làm ăn: nhiều thẻ cho người chơi quyết định (đồng ý hay bỏ qua, chọn ô, chọn người). Bé Na Học Sinh được xem 2 thẻ Cơ Hội và chọn 1.
+- Khoản đầu tư hoặc khoản vay có thời hạn hiện trên bảng người chơi và tự xử lý khi đến lượt.
+- Thẻ "giữ lại dùng sau" chính là Thẻ Kỹ Năng, chung giới hạn tối đa 3 thẻ. Thẻ Kỹ Năng có thêm **Miễn Phạt** (hủy 1 khoản Thuế hoặc phạt Khí Vận).
+
+**Bộ Khí Vận (30 thẻ)**
+
+| # | Tên thẻ | Nội dung |
+|---|---|---|
+| 01 | Thần Tài gõ cửa | Nhặt được chiếc ví bên đường. Nhận 200. |
+| 02 | Trúng mùa lúa lớn | Ruộng lúa nhà bạn bội thu. Nhận 150. |
+| 03 | Nhặt được hũ vàng | Đào đất sau nhà phát hiện hũ vàng. Nhận 300. |
+| 04 | Được bà con thương | Bà con trong làng góp tiền giúp đỡ. Mỗi người tặng bạn 30. |
+| 05 | Rằm tháng Giêng đi chùa | Lên chùa cầu may, được lộc. Nhận 1 đặc sản ngẫu nhiên và 50. |
+| 06 | Đám cưới linh đình | Đi ăn cưới, chủ nhà lì xì. Nhận 100. |
+| 07 | Được tổ tiên phù hộ | May mắn liên tiếp! Đi tiếp 3 ô. |
+| 08 | Gặp quý nhân | Người giàu nhất bàn tặng bạn 150. Nếu bạn là người giàu nhất, ngân hàng tặng 75. |
+| 09 | Mưa thuận gió hòa | Nhận thẻ Miễn Thuê. |
+| 10 | Thần may mắn nhập vai | Được tung xúc xắc thêm một lần sau lượt này. |
+| 11 | Xin quẻ đầu năm | Tung 1 viên xúc xắc: ra 6 nhận 400, ra 1 mất 150, số khác bình an. |
+| 12 | Cơn sốt đất quê | Một tỉnh của bạn được nâng 1 cấp nhà miễn phí. Chưa có tỉnh nào thì nhận 100. |
+| 13 | Trúng thưởng hội làng | Thắng cuộc thi kéo co. Nhận 150. |
+| 14 | Sổ đỏ chính chủ | Nhận thẻ Bảo Hiểm. |
+| 15 | Heo đất vỡ | Tìm thấy khoản tiết kiệm cũ. Nhận 100. |
+| 16 | Gà đẻ trứng vàng | Bán được đàn gà quý. Nhận 250. |
+| 17 | Vận đen đầu tháng | Đánh rơi tiền trên đường. Nộp 100 vào Quỹ Từ Thiện. |
+| 18 | Xe bò tuột bánh | Đứng sửa xe. Lượt sau chỉ được tung 1 viên xúc xắc. |
+| 19 | Gà phá vườn hàng xóm | Bồi thường 80 cho người chơi ở lượt trước bạn. |
+| 20 | Bị thương lái ép giá | Bán nông sản lỗ. Nộp 150 vào Quỹ Từ Thiện. |
+| 21 | Lũ về miền Tây | Mỗi tỉnh Miền Tây bạn sở hữu đóng 60 tiền khắc phục. |
+| 22 | Bị mất mùa | Mỗi ô đất bạn sở hữu đóng 30. |
+| 23 | Xe máy hết xăng | Dắt bộ, lùi lại 2 ô. |
+| 24 | Bị gọi lên xã | Có việc phải giải trình. Vào Kẹt Xe! |
+| 25 | Cúp điện diện rộng | Tiền thuê toàn bàn giảm 50% đến hết vòng này. |
+| 26 | Cháy chợ | Mọi người mất 1 đặc sản ngẫu nhiên. |
+| 27 | Bảo trì nhà cửa | Mỗi cấp nhà bạn đang có tốn 25. |
+| 28 | Phạt nguội | Vượt đèn đỏ bị phạt nguội. Nộp 80 vào Quỹ Từ Thiện. |
+| 29 | Đóng học phí | Đóng học phí cho con. Nộp 120 vào Quỹ Từ Thiện. |
+| 30 | Mời cả làng ăn cỗ | Trả mỗi người chơi 40. |
+
+**Bộ Cơ Hội (30 thẻ)**
+
+| # | Tên thẻ | Nội dung |
+|---|---|---|
+| 01 | Mở quán cà phê võng | Đầu tư 200, sau 2 lượt của bạn nhận về 350. |
+| 02 | Nuôi cá ao làng | Bỏ vốn 150 rồi tung 1 viên: 4–6 thu về 350, 1–3 mất vốn. |
+| 03 | Buôn chuyến trái cây | Chuyến hàng lãi lớn. Nhận 150. |
+| 04 | Mua đất nhanh tay | Chọn 1 ô chưa có chủ ở bất kỳ đâu, mua ngay với giá giảm 20%. |
+| 05 | Hùn vốn làm ăn | Góp 100 rồi tung 1 viên: 4–6 thu về 250, 1–3 mất vốn. |
+| 06 | Thuê người trông đất | Nhận thẻ Miễn Thuê. |
+| 07 | Đổi đời nhờ TikTok | Quảng bá nông sản thành công. Nhận 250. |
+| 08 | Bán hàng livestream | Mỗi người chơi chốt đơn, trả bạn 40. |
+| 09 | Trúng hợp đồng cung cấp gạo | Nhận 300 từ ngân hàng. |
+| 10 | Mở rộng trang trại | Nâng 1 cấp nhà ở tỉnh bất kỳ của bạn, giảm 50% chi phí. |
+| 11 | Đi tắt đón đầu | Chọn đi tới 1 ô bất kỳ trong 5 ô phía trước. |
+| 12 | Dời Lễ Hội | Chuyển Lễ Hội về 1 tỉnh của bạn. |
+| 13 | Mượn vốn ngân hàng | Nhận ngay 300, sau 3 lượt của bạn phải trả 400. |
+| 14 | Bắt được mối hàng lớn | Nhận 150. Nếu sở hữu từ 3 ô đất trở lên, nhận thêm 150. |
+| 15 | Bán đất sinh lời | Bán 1 ô đất chưa xây nhà của bạn cho ngân hàng với giá 150% giá gốc. |
+| 16 | Đòi nợ cũ | Chọn 1 người chơi, người đó trả bạn 80. |
+| 17 | Đặc sản lên sàn | Bán toàn bộ đặc sản đang có, mỗi món 70. |
+| 18 | Gói hỗ trợ nông nghiệp | Nhận 150 và được nâng 1 cấp nhà miễn phí. |
+| 19 | Chuyến xe miễn phí | Đi tới bất kỳ ô nào bạn muốn. |
+| 20 | Bí quyết kinh doanh | Nhận thẻ Miễn Phạt. |
+| 21 | Thử vận may | Chọn 1 người đấu xúc xắc. Ai cao hơn nhận 150 từ người kia. |
+| 22 | Bảo hiểm tài sản | Nhận thẻ Bảo Hiểm. |
+| 23 | Đầu tư hạ tầng | Chọn 1 ô hạ tầng hoặc Trạm BOT chưa có chủ, mua ngay với giá gốc. |
+| 24 | Chạy quảng cáo | Nhận 50 cho mỗi ô đất bạn sở hữu, tối đa 400. |
+| 25 | Cơ hội vàng | Tung 1 viên: chẵn nhận 250, lẻ nhận 80. |
+| 26 | Thách thức đại gia | Đấu xúc xắc với người giàu nhất: thắng nhận 250 từ ngân hàng, thua trả họ 100. |
+| 27 | Chọn ngày lành | Nhận thẻ Xúc Xắc Vàng. |
+| 28 | Làm ăn xa quê | Về Km 0 nhận lương. |
+| 29 | Giải tỏa mặt bằng | Nhận thẻ Giải Tỏa. |
+| 30 | Lật kèo phút chót | Chọn 1 người chơi, đổi vị trí của hai người trên bàn cờ. |
 
 ---
 
@@ -268,14 +359,17 @@ data/        Bảng giá ô đất, thẻ Cơ Hội, nhân vật, mùa (JSON/Res
 
 ---
 
-## 13. Thông số cân bằng hiện tại (sau mô phỏng 300 ván toàn bot)
+## 13. Thông số cân bằng hiện tại (sau mô phỏng 600 ván toàn bot)
 
 | Thông số | Giá trị |
 |---|---|
-| Tiền khởi đầu / lương qua Km 0 | 2.000 / 200 |
+| Tiền khởi đầu / lương qua Km 0 | 2.000 / 200 xu |
 | Hệ số tiền thuê theo cấp (đất trống → Danh Thắng) | 0,2 / 0,8 / 1,8 / 3,2 / 5,0 × giá đất |
 | Hệ số chi phí xây từng cấp | 0,5 / 0,6 / 0,8 / 1,2 × giá đất |
 | Thâu tóm | 1,5 × giá trị đầu tư |
+| Trạm BOT | qua 30, dừng 90, giá mua 150 |
+| Đụng độ | 50 |
+| Kẹt Xe | phí xe ôm 100; CSGT phân luồng sau 2 lần trượt |
 | Đổi mùa | mỗi 2 vòng; 35% có sự kiện (bão / lũ / năm du lịch) |
 
-Kết quả mô phỏng: không lỗi; trung bình 1,5 người phá sản mỗi ván; tỷ lệ thắng các nhân vật từ 16% đến 25% (mức trung bình kỳ vọng là khoảng 20%). Các con số nằm trong `scripts/core/game_engine.gd` và được chỉnh tiếp sau khi chơi thử.
+Kết quả mô phỏng (bàn 52 ô, 25 vòng): không lỗi; trung bình 1,3 người phá sản mỗi ván; Quỹ Từ Thiện lúc hết ván còn trung bình khoảng 160 xu. Tỷ lệ thắng của 8 nhân vật từ 18% đến 24% (mức trung bình kỳ vọng là khoảng 20%), sau khi tăng kỹ năng cho Anh Ba Xe Ôm, Ông Sáu Nông Dân và Anh Út Nghệ Sĩ. Các con số nằm trong `scripts/core/game_engine.gd` và được chỉnh tiếp sau khi chơi thử.

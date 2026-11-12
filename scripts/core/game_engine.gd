@@ -24,6 +24,10 @@ const MAX_LEVEL_ON_BUY := 1
 const SEASON_ROUNDS := 2
 const MAX_CARDS := 3
 const FREE_RENT_THRESHOLD := 150
+const TOLL_FEE := 30          # phí qua Trạm BOT
+const TOLL_LAND_MULT := 3     # dừng đúng Trạm BOT của người khác trả ×3
+const DUEL_AMOUNT := 50       # Đụng độ: người thua trả người thắng
+const JAIL_MAX_TRIES := 2     # sau 2 lần tung trượt thì CSGT phân luồng, tự thoát
 
 const SEASON_NAMES := ["Xuân – Tết", "Hạ – Mùa du lịch", "Thu – Mùa gặt", "Đông – Gió mùa"]
 const SEASON_DESC := [
@@ -52,7 +56,9 @@ var eliminated: Array = []
 var rng := RandomNumberGenerator.new()
 
 var _events: Array = []
-var _chance_deck: Array = []
+var _decks: Dictionary = {}
+var charity_pot: int = 0
+var blackout_round: int = -1
 var _bonus_roll: bool = false
 var _group_tiles: Array = []
 
@@ -86,6 +92,8 @@ func setup(configs: Array, p_seed: int = 0, p_max_rounds: int = 25) -> Array:
 			"specialties": [],
 			"cards": [],
 			"storm_shield": ch == "ngu_dan",
+			"one_die": false,
+			"delayed": [],
 		})
 	owner.resize(BoardData.TILE_COUNT)
 	owner.fill(-1)
@@ -97,7 +105,9 @@ func setup(configs: Array, p_seed: int = 0, p_max_rounds: int = 25) -> Array:
 	for t in BoardData.TILE_COUNT:
 		if BoardData.is_province(t):
 			_group_tiles[BoardData.tile(t)["group"]].append(t)
-	_chance_deck.clear()
+	_decks = {"khi_van": [], "co_hoi": []}
+	charity_pot = 0
+	blackout_round = -1
 	current = 0
 	round_num = 1
 	season = 0
@@ -211,20 +221,26 @@ func rent(t: int) -> int:
 		return 0
 	var td := BoardData.tile(t)
 	if td["type"] == BoardData.T.INFRA:
-		return INFRA_RENT[infra_count(o)]
+		return _round5(INFRA_RENT[infra_count(o)] * (0.5 if blackout_round == round_num else 1.0))
+	if td["type"] == BoardData.T.TOLL:
+		return TOLL_FEE * TOLL_LAND_MULT
 	var r: float = td["price"] * RENT_MULT[level[t]]
 	if owns_group(o, td["group"]):
 		r *= 2.0
 	if t == festival_tile:
-		r *= 2.5 if players[o]["character"] == "nghe_si" else 2.0
+		r *= 3.0 if players[o]["character"] == "nghe_si" else 2.0
 	r *= season_mult(t)
 	if players[o]["character"] == "ngu_dan" and td.get("coastal", false):
 		r *= 1.1
+	if players[o]["character"] == "nong_dan" and (td["group"] == 0 or td["group"] == 1 or td["group"] == 8):
+		r *= 1.15
 	var ev_type: String = season_event.get("type", "")
 	if ev_type == "flood" and td["group"] == 8:
 		r *= 0.5
 	elif ev_type == "tourism" and season_event.get("tile", -1) == t:
 		r *= 2.0
+	if blackout_round == round_num:
+		r *= 0.5
 	return _round5(r)
 
 
@@ -372,16 +388,19 @@ func _apply(a: Dictionary) -> bool:
 			return _act_lottery(p, kind, a)
 		"market":
 			return _act_market(p, kind)
-		"chance_pick":
+		"card_pick":
 			if kind != "pick":
 				return false
 			var idx: int = a.get("index", 0)
 			var cards: Array = pending["cards"]
 			if idx < 0 or idx >= cards.size():
 				return false
+			var dk: String = pending["deck"]
 			pending = {}
-			_apply_chance(p, cards[idx])
+			_apply_card(p, dk, cards[idx])
 			return true
+		"card_confirm", "card_player", "card_tile":
+			return _act_card(p, ptype, kind, a)
 	return false
 
 
@@ -423,12 +442,26 @@ func _act_jail(p: Dictionary, kind: String) -> bool:
 	if kind == "pay":
 		if p["cash"] < fee:
 			return false
-		_pay(p, fee, -1, "Phí thoát Kẹt Xe")
+		_pay(p, fee, -1, "Phí xe ôm", true)
 		p["in_jail"] = false
 		p["jail_tries"] = 0
 		_push({"t": "jail_free", "p": p["id"]})
 		_log("%s trả %s gọi xe ôm thoát Kẹt Xe." % [p["name"], BoardData.money(fee)])
 		_set_turn_pending()
+		return true
+	if kind == "shortcut":
+		# Đi đường tắt: tung 1 viên, chẵn thoát ngay (rồi tung đi như thường), lẻ kẹt thêm 1 lượt.
+		pending = {}
+		var v := rng.randi_range(1, 6)
+		_push({"t": "dice", "p": p["id"], "d": [v]})
+		if v % 2 == 0:
+			p["in_jail"] = false
+			p["jail_tries"] = 0
+			_push({"t": "jail_free", "p": p["id"]})
+			_log("%s đi đường tắt, tung %d (chẵn) — thoát Kẹt Xe!" % [p["name"], v])
+			_set_turn_pending()
+		else:
+			_log("%s đi đường tắt, tung %d (lẻ) — lạc đường, kẹt thêm 1 lượt." % [p["name"], v])
 		return true
 	if kind == "roll":
 		pending = {}
@@ -439,14 +472,11 @@ func _act_jail(p: Dictionary, kind: String) -> bool:
 			_free_and_move(p, d[0] + d[1])
 			return true
 		p["jail_tries"] += 1
-		if p["jail_tries"] >= 3:
-			_log("%s kẹt 3 lượt, buộc trả phí %s để đi tiếp." % [p["name"], BoardData.money(fee)])
-			_pay(p, fee, -1, "Phí thoát Kẹt Xe")
-			if not p["alive"]:
-				return true
+		if p["jail_tries"] >= JAIL_MAX_TRIES:
+			_log("CSGT phân luồng! %s được thoát Kẹt Xe miễn phí." % p["name"])
 			_free_and_move(p, d[0] + d[1])
 			return true
-		_log("%s tung %d-%d, vẫn còn kẹt xe (%d/3)." % [p["name"], d[0], d[1], p["jail_tries"]])
+		_log("%s tung %d-%d, vẫn còn kẹt xe (%d/%d)." % [p["name"], d[0], d[1], p["jail_tries"], JAIL_MAX_TRIES])
 		return true
 	return false
 
@@ -618,6 +648,12 @@ func _act_market(p: Dictionary, kind: String) -> bool:
 func _begin_turn() -> void:
 	var p: Dictionary = players[current]
 	_push({"t": "turn", "p": current})
+	_process_delayed(p)
+	if game_over:
+		return
+	if not p["alive"]:
+		_next_player()
+		return
 	if p["in_jail"]:
 		if p["cards"].has("THOAT_KET"):
 			_use_card(p, "THOAT_KET")
@@ -626,12 +662,34 @@ func _begin_turn() -> void:
 			_push({"t": "jail_free", "p": current})
 			_log("%s dùng thẻ Thoát Kẹt." % p["name"])
 		else:
-			pending = {"type": "jail", "p": current, "fee": jail_fee(current), "tries": p["jail_tries"]}
+			pending = {"type": "jail", "p": current, "fee": jail_fee(current), "tries": p["jail_tries"], "max_tries": JAIL_MAX_TRIES}
 			return
 	if p["train_pending"]:
 		pending = {"type": "train", "p": current, "fee": train_fee(current)}
 		return
 	_set_turn_pending()
+
+
+func _process_delayed(p: Dictionary) -> void:
+	var remain: Array = []
+	var due: Array = []
+	for d in p["delayed"]:
+		d["turns"] -= 1
+		if d["turns"] > 0:
+			remain.append(d)
+		else:
+			due.append(d)
+	p["delayed"] = remain
+	for d in due:
+		var amt: int = d["amount"]
+		if amt > 0:
+			_add_cash(p, amt, d["text"])
+			_log("%s: %s — nhận %s." % [p["name"], d["text"], BoardData.money(amt)])
+		else:
+			_log("%s: %s — trả %s." % [p["name"], d["text"], BoardData.money(-amt)])
+			_pay(p, -amt, -1, d["text"])
+			if not p["alive"]:
+				return
 
 
 func _set_turn_pending() -> void:
@@ -747,6 +805,15 @@ func _roll_dice(forced_total: int) -> Array:
 
 
 func _roll_and_move(p: Dictionary, forced: int) -> void:
+	if p["one_die"] and forced < 0:
+		p["one_die"] = false
+		var v := rng.randi_range(1, 6)
+		_push({"t": "dice", "p": p["id"], "d": [v]})
+		_log("%s chỉ được tung 1 viên: %d." % [p["name"], v])
+		p["doubles"] = 0
+		_move(p, v)
+		_land(p)
+		return
 	var d := _roll_dice(forced)
 	_push({"t": "dice", "p": p["id"], "d": d})
 	if forced < 0 and d[0] == d[1]:
@@ -768,11 +835,15 @@ func _move(p: Dictionary, steps: int, fast: bool = false) -> void:
 	var pos: int = p["pos"]
 	var dir := 1 if steps >= 0 else -1
 	var passed_start := false
-	for i in absi(steps):
+	var tolls: Array = []
+	var n := absi(steps)
+	for i in n:
 		pos = posmod(pos + dir, BoardData.TILE_COUNT)
 		path.append(pos)
 		if pos == BoardData.START_TILE and dir > 0:
 			passed_start = true
+		if dir > 0 and not fast and i < n - 1 and BoardData.tile(pos)["type"] == BoardData.T.TOLL:
+			tolls.append(pos)
 	p["pos"] = pos
 	_push({"t": "move", "p": p["id"], "path": path, "fast": fast})
 	if passed_start:
@@ -783,22 +854,59 @@ func _move(p: Dictionary, steps: int, fast: bool = false) -> void:
 			amt += 100
 		_add_cash(p, amt, "Lương qua Km 0")
 		_log("%s qua Km 0, nhận lương %s." % [p["name"], BoardData.money(amt)])
+	for t in tolls:
+		var o: int = owner[t]
+		if o == p["id"] or p["character"] == "xe_om":
+			continue
+		if o >= 0 and players[o]["alive"]:
+			_log("%s qua Trạm BOT, trả %s cho %s." % [p["name"], BoardData.money(TOLL_FEE), players[o]["name"]])
+			_pay(p, TOLL_FEE, o, "Phí BOT")
+		else:
+			_log("%s qua Trạm BOT, nộp %s vào Quỹ Từ Thiện." % [p["name"], BoardData.money(TOLL_FEE)])
+			_pay(p, TOLL_FEE, -1, "Phí BOT", true)
+		_push({"t": "toll", "p": p["id"], "tile": t})
+		if not p["alive"]:
+			return
 
 
 func _land(p: Dictionary) -> void:
+	if not p["alive"]:
+		return
 	var t: int = p["pos"]
+	# Đụng độ: dừng cùng ô với người khác thì đấu xúc xắc
+	if t != BoardData.JAIL_TILE:
+		for other in players:
+			if other["id"] != p["id"] and other["alive"] and other["pos"] == t:
+				_log("%s đụng độ %s!" % [p["name"], other["name"]])
+				_duel(p, other, DUEL_AMOUNT)
+				if not p["alive"] or game_over:
+					return
 	var ty: int = BoardData.tile(t)["type"]
 	if ty == BoardData.T.START:
 		_add_cash(p, SALARY, "Dừng đúng Km 0")
 		_log("%s dừng đúng Km 0, thưởng thêm %s!" % [p["name"], BoardData.money(SALARY)])
-	elif ty == BoardData.T.PROVINCE or ty == BoardData.T.INFRA:
+	elif ty == BoardData.T.PROVINCE or ty == BoardData.T.INFRA or ty == BoardData.T.TOLL:
 		_land_property(p, t)
-	elif ty == BoardData.T.CHANCE:
-		_draw_chance(p)
+	elif ty == BoardData.T.KHI_VAN:
+		_apply_card(p, "khi_van", _draw("khi_van"))
+	elif ty == BoardData.T.CO_HOI:
+		if p["character"] == "hoc_sinh":
+			pending = {"type": "card_pick", "p": p["id"], "deck": "co_hoi", "cards": [_draw("co_hoi"), _draw("co_hoi")]}
+		else:
+			_apply_card(p, "co_hoi", _draw("co_hoi"))
 	elif ty == BoardData.T.TAX:
 		var amt := mini(200, _round5(net_worth(p["id"]) * 0.1))
-		_log("%s nộp thuế %s." % [p["name"], BoardData.money(amt)])
-		_pay(p, amt, -1, "Thuế")
+		_log("%s phải nộp thuế %s." % [p["name"], BoardData.money(amt)])
+		_fine(p, amt, "Thuế")
+	elif ty == BoardData.T.CHARITY:
+		if charity_pot > 0:
+			var pot := charity_pot
+			_set_pot(0)
+			_add_cash(p, pot, "Quỹ Từ Thiện")
+			_log("%s nhận toàn bộ Quỹ Từ Thiện: %s!" % [p["name"], BoardData.money(pot)])
+			_push({"t": "charity", "p": p["id"], "amount": pot})
+		else:
+			_log("%s đến Quỹ Từ Thiện nhưng quỹ đang trống." % p["name"])
 	elif ty == BoardData.T.JAIL:
 		_log("%s dính Kẹt Xe!" % p["name"])
 		_send_jail(p)
@@ -865,73 +973,365 @@ func _send_jail(p: Dictionary) -> void:
 
 # ---------------------------------------------------------------- thẻ
 
-func _next_chance() -> int:
-	if _chance_deck.is_empty():
-		for i in CardsData.CHANCE.size():
-			_chance_deck.append(i)
-		for i in range(_chance_deck.size() - 1, 0, -1):
+func _draw(deck_name: String) -> int:
+	var d: Array = _decks[deck_name]
+	if d.is_empty():
+		for i in CardsData.deck(deck_name).size():
+			d.append(i)
+		for i in range(d.size() - 1, 0, -1):
 			var j := rng.randi_range(0, i)
-			var tmp: int = _chance_deck[i]
-			_chance_deck[i] = _chance_deck[j]
-			_chance_deck[j] = tmp
-	return _chance_deck.pop_back()
+			var tmp: int = d[i]
+			d[i] = d[j]
+			d[j] = tmp
+	return d.pop_back()
 
 
-func _draw_chance(p: Dictionary) -> void:
-	if p["character"] == "hoc_sinh":
-		var a := _next_chance()
-		var b := _next_chance()
-		pending = {"type": "chance_pick", "p": p["id"], "cards": [a, b]}
+func _apply_card(p: Dictionary, deck_name: String, idx: int) -> void:
+	var c: Dictionary = CardsData.card(deck_name, idx)
+	var deck_label := "Khí Vận" if deck_name == "khi_van" else "Cơ Hội"
+	_push({"t": "card", "p": p["id"], "deck": deck_name, "name": c["name"], "text": c["text"]})
+	_log("%s rút %s — %s: %s" % [p["name"], deck_label, c["name"], c["text"]])
+	var kind: String = c["kind"]
+	if CardsData.DECISION_KINDS.has(kind):
+		_offer_card_decision(p, deck_name, idx, c)
 		return
-	_apply_chance(p, _next_chance())
-
-
-func _apply_chance(p: Dictionary, idx: int) -> void:
-	var c: Dictionary = CardsData.CHANCE[idx]
-	_push({"t": "chance", "p": p["id"], "text": c["text"]})
-	_log("%s rút Cơ Hội: %s" % [p["name"], c["text"]])
-	match String(c["kind"]):
+	var pid: int = p["id"]
+	match kind:
 		"money":
 			var amt: int = c["amount"]
 			if amt >= 0:
-				_add_cash(p, amt, "Cơ Hội")
+				_add_cash(p, amt, c["name"])
 			else:
-				_pay(p, -amt, -1, "Cơ Hội")
-		"move_to":
-			_move(p, posmod(int(c["tile"]) - int(p["pos"]), BoardData.TILE_COUNT))
-			_land(p)
+				_fine(p, -amt, c["name"])
+		"money_each":
+			var amt: int = c["amount"]
+			for oid in alive_players():
+				if oid == pid or not p["alive"]:
+					continue
+				if amt > 0:
+					_pay(players[oid], amt, pid, c["name"])
+				else:
+					_pay(p, -amt, oid, c["name"])
+		"richest_gift":
+			var amt: int = c["amount"]
+			var rich := _richest(-1)
+			if rich == pid:
+				_add_cash(p, amt / 2, c["name"])
+			else:
+				_pay(players[rich], amt, pid, c["name"])
+		"pay_prev":
+			var prev := _prev_player(pid)
+			if prev >= 0:
+				_pay(p, c["amount"], prev, c["name"])
 		"move_steps":
 			_move(p, c["steps"])
 			_land(p)
+		"move_to":
+			_move(p, posmod(int(c["tile"]) - int(p["pos"]), BoardData.TILE_COUNT))
+			_land(p)
 		"jail":
 			_send_jail(p)
-		"pay_each":
-			for pid in alive_players():
-				if pid != p["id"] and p["alive"]:
-					_pay(p, c["amount"], pid, "Lì xì")
-		"collect_each":
-			for pid in alive_players():
-				if pid != p["id"]:
-					_pay(players[pid], c["amount"], p["id"], "Mừng sinh nhật")
-		"upgrade":
-			var cands: Array = []
-			for t in owned_tiles(p["id"]):
-				if BoardData.is_province(t) and level[t] < 3:
-					cands.append(t)
-			if cands.is_empty():
-				_log("...nhưng %s chưa có nhà nào để nâng cấp." % p["name"])
-			else:
-				var t: int = cands[rng.randi_range(0, cands.size() - 1)]
-				_set_tile(t, p["id"], level[t] + 1)
-				_log("%s được nâng lên %s miễn phí." % [BoardData.plain_name(t), LEVEL_NAMES[level[t]]])
+		"one_die":
+			p["one_die"] = true
+		"extra_roll":
+			_bonus_roll = true
 		"skill":
-			_give_skill(p, CardsData.COMMON_SKILLS[rng.randi_range(0, CardsData.COMMON_SKILLS.size() - 1)])
+			_give_skill(p, c["card"])
+		"upgrade_free":
+			if not _upgrade_random(p):
+				_add_cash(p, c["bonus"], c["name"])
+		"per_tile_pay":
+			var n := owned_tiles(pid).size()
+			if n > 0:
+				_fine(p, n * int(c["amount"]), c["name"])
+		"region_pay":
+			var n := group_count(pid, c["group"])
+			if n > 0:
+				_fine(p, n * int(c["amount"]), c["name"])
+			else:
+				_log("...%s không có tỉnh nào bị ảnh hưởng." % p["name"])
 		"repair":
 			var lv := 0
-			for t in owned_tiles(p["id"]):
+			for t in owned_tiles(pid):
 				lv += level[t]
 			if lv > 0:
-				_pay(p, lv * int(c["amount"]), -1, "Bảo trì nhà")
+				_fine(p, lv * int(c["amount"]), c["name"])
+		"year_luck":
+			var v := rng.randi_range(1, 6)
+			_push({"t": "dice", "p": pid, "d": [v]})
+			if v == 6:
+				_add_cash(p, c["win"], c["name"])
+				_log("%s gieo được 6 — đại cát!" % p["name"])
+			elif v == 1:
+				_log("%s gieo được 1 — xui rồi." % p["name"])
+				_pay(p, c["lose"], -1, c["name"], true)
+			else:
+				_log("%s gieo được %d — bình an." % [p["name"], v])
+		"specialty_money":
+			_give_specialty(p, _random_province())
+			_add_cash(p, c["amount"], c["name"])
+		"support_build":
+			_add_cash(p, c["amount"], c["name"])
+			_upgrade_random(p)
+		"per_tile_gain":
+			var gain := mini(int(c["cap"]), owned_tiles(pid).size() * int(c["amount"]))
+			if gain > 0:
+				_add_cash(p, gain, c["name"])
+		"bonus_tiles":
+			var gain: int = c["amount"]
+			if owned_tiles(pid).size() >= int(c["min"]):
+				gain += int(c["extra"])
+			_add_cash(p, gain, c["name"])
+		"blackout":
+			blackout_round = round_num
+			_push({"t": "blackout", "round": round_num})
+		"market_fire":
+			for oid in alive_players():
+				var sp: Array = players[oid]["specialties"]
+				if sp.size() > 0:
+					sp.remove_at(rng.randi_range(0, sp.size() - 1))
+					_push({"t": "specialty_lost", "p": oid})
+
+
+func _offer_card_decision(p: Dictionary, deck_name: String, idx: int, c: Dictionary) -> void:
+	var pid: int = p["id"]
+	var kind: String = c["kind"]
+	var dtype: String = CardsData.DECISION_KINDS[kind]
+	var base := {"p": pid, "deck": deck_name, "idx": idx, "name": c["name"], "text": c["text"], "kind": kind}
+	if dtype == "confirm":
+		var ok := true
+		match kind:
+			"invest", "gamble":
+				ok = int(p["cash"]) >= int(c["cost"])
+			"duel_richest":
+				ok = _richest(pid) >= 0
+			"sell_specialties":
+				ok = p["specialties"].size() > 0
+		if not ok:
+			_log("...nhưng %s chưa đủ điều kiện dùng thẻ này." % p["name"])
+			return
+		base["type"] = "card_confirm"
+		pending = base
+	elif dtype == "player":
+		var opts: Array = []
+		for oid in alive_players():
+			if oid == pid:
+				continue
+			if kind == "swap_pos" and players[oid]["in_jail"]:
+				continue
+			opts.append(oid)
+		if opts.is_empty():
+			return
+		base["type"] = "card_player"
+		base["options"] = opts
+		pending = base
+	else:
+		var tiles := card_tile_options(pid, c)
+		if tiles.is_empty():
+			_log("...nhưng %s không có ô nào phù hợp để dùng thẻ." % p["name"])
+			return
+		base["type"] = "card_tile"
+		base["options"] = tiles
+		pending = base
+
+
+## Danh sách ô hợp lệ cho thẻ Cơ Hội cần chọn ô.
+func card_tile_options(pid: int, c: Dictionary) -> Array:
+	var p: Dictionary = players[pid]
+	var res: Array = []
+	var cash: int = p["cash"]
+	match String(c["kind"]):
+		"buy_remote":
+			for t in BoardData.TILE_COUNT:
+				if owner[t] != -1 or not BoardData.is_property(t):
+					continue
+				var ty: int = BoardData.tile(t)["type"]
+				if c["only_infra"] and ty == BoardData.T.PROVINCE:
+					continue
+				if cash >= card_price(pid, t, c):
+					res.append(t)
+		"sell_bonus":
+			for t in owned_tiles(pid):
+				if level[t] == 0:
+					res.append(t)
+		"build_anywhere":
+			for t in owned_tiles(pid):
+				if not BoardData.is_province(t) or level[t] >= 4:
+					continue
+				if level[t] == 3 and group_count(pid, BoardData.tile(t)["group"]) < 2:
+					continue
+				if cash >= card_price(pid, t, c):
+					res.append(t)
+		"move_ahead":
+			for k in range(1, int(c["range"]) + 1):
+				res.append(posmod(int(p["pos"]) + k, BoardData.TILE_COUNT))
+		"move_anywhere":
+			for t in BoardData.TILE_COUNT:
+				if t != int(p["pos"]):
+					res.append(t)
+		"move_festival":
+			res = festival_options(pid)
+	return res
+
+
+## Giá phải trả khi dùng thẻ trên ô t (mua từ xa / xây từ xa).
+func card_price(pid: int, t: int, c: Dictionary) -> int:
+	if c["kind"] == "buy_remote":
+		return _round5(buy_price(pid, t) * float(c["discount"]))
+	if c["kind"] == "build_anywhere":
+		return _round5(build_cost(pid, t, level[t] + 1) * float(c["discount"]))
+	return 0
+
+
+func _act_card(p: Dictionary, ptype: String, kind: String, a: Dictionary) -> bool:
+	var c: Dictionary = CardsData.card(pending["deck"], pending["idx"])
+	var pid: int = p["id"]
+	if kind == "pass":
+		pending = {}
+		_log("%s bỏ qua thẻ %s." % [p["name"], c["name"]])
+		return true
+	if ptype == "card_confirm":
+		if kind != "accept":
+			return false
+		pending = {}
+		_resolve_confirm(p, c)
+		return true
+	if ptype == "card_player":
+		var target: int = a.get("target", -1)
+		if kind != "pick_player" or not pending["options"].has(target):
+			return false
+		pending = {}
+		_resolve_player(p, c, players[target])
+		return true
+	if ptype == "card_tile":
+		var t: int = a.get("tile", -1)
+		if kind != "pick_tile" or not pending["options"].has(t):
+			return false
+		pending = {}
+		_resolve_tile(p, c, t)
+		return true
+	return false
+
+
+func _resolve_confirm(p: Dictionary, c: Dictionary) -> void:
+	var pid: int = p["id"]
+	match String(c["kind"]):
+		"invest":
+			_pay(p, c["cost"], -1, c["name"])
+			p["delayed"].append({"turns": int(c["turns"]), "amount": int(c["gain"]), "text": c["name"]})
+			_log("%s đầu tư %s, %d lượt nữa nhận về %s." % [p["name"], BoardData.money(c["cost"]), c["turns"], BoardData.money(c["gain"])])
+		"loan":
+			_add_cash(p, c["gain"], c["name"])
+			p["delayed"].append({"turns": int(c["turns"]), "amount": -int(c["cost"]), "text": "Trả nợ ngân hàng"})
+			_log("%s vay %s, %d lượt nữa phải trả %s." % [p["name"], BoardData.money(c["gain"]), c["turns"], BoardData.money(c["cost"])])
+		"gamble":
+			_pay(p, c["cost"], -1, c["name"])
+			var v := rng.randi_range(1, 6)
+			_push({"t": "dice", "p": pid, "d": [v]})
+			if v >= int(c["need"]):
+				_add_cash(p, c["win"], c["name"])
+				_log("%s tung %d — thắng lớn, thu về %s!" % [p["name"], v, BoardData.money(c["win"])])
+			else:
+				_log("%s tung %d — mất vốn." % [p["name"], v])
+		"duel_richest":
+			var rich: Dictionary = players[_richest(pid)]
+			var ra := rng.randi_range(1, 6)
+			var rb := rng.randi_range(1, 6)
+			while ra == rb:
+				rb = rng.randi_range(1, 6)
+			_push({"t": "duel", "a": pid, "b": rich["id"], "ra": ra, "rb": rb})
+			if ra > rb:
+				_add_cash(p, c["win"], c["name"])
+				_log("%s thắng đại gia %s (%d – %d), nhận %s!" % [p["name"], rich["name"], ra, rb, BoardData.money(c["win"])])
+			else:
+				_log("%s thua đại gia %s (%d – %d), trả %s." % [p["name"], rich["name"], ra, rb, BoardData.money(c["lose"])])
+				_pay(p, c["lose"], rich["id"], c["name"])
+		"sell_specialties":
+			var n: int = p["specialties"].size()
+			p["specialties"].clear()
+			_add_cash(p, n * int(c["price"]), c["name"])
+			_push({"t": "specialty_lost", "p": pid})
+			_log("%s bán %d đặc sản, thu %s." % [p["name"], n, BoardData.money(n * int(c["price"]))])
+
+
+func _resolve_player(p: Dictionary, c: Dictionary, target: Dictionary) -> void:
+	match String(c["kind"]):
+		"duel_choose":
+			_log("%s thách %s đấu xúc xắc!" % [p["name"], target["name"]])
+			_duel(p, target, c["amount"])
+		"take_from":
+			_log("%s đòi nợ %s %s." % [p["name"], target["name"], BoardData.money(c["amount"])])
+			_pay(target, c["amount"], p["id"], c["name"])
+		"swap_pos":
+			var a_pos: int = p["pos"]
+			p["pos"] = target["pos"]
+			target["pos"] = a_pos
+			_push({"t": "swap", "a": p["id"], "b": target["id"]})
+			_log("%s đổi chỗ với %s!" % [p["name"], target["name"]])
+
+
+func _resolve_tile(p: Dictionary, c: Dictionary, t: int) -> void:
+	var pid: int = p["id"]
+	match String(c["kind"]):
+		"buy_remote":
+			var price := card_price(pid, t, c)
+			_pay(p, price, -1, "Mua đất")
+			_set_tile(t, pid, 0)
+			_log("%s mua %s từ xa với giá %s." % [p["name"], BoardData.plain_name(t), BoardData.money(price)])
+			_check_domination(pid)
+		"sell_bonus":
+			var gain := _round5(int(BoardData.tile(t)["price"]) * float(c["mult"]))
+			_set_tile(t, -1, 0)
+			_add_cash(p, gain, c["name"])
+			_log("%s bán %s cho ngân hàng được %s." % [p["name"], BoardData.plain_name(t), BoardData.money(gain)])
+		"build_anywhere":
+			var cost := card_price(pid, t, c)
+			_pay(p, cost, -1, "Xây dựng")
+			_set_tile(t, pid, level[t] + 1)
+			_log("%s nâng %s lên %s (%s)." % [p["name"], BoardData.plain_name(t), LEVEL_NAMES[level[t]], BoardData.money(cost)])
+		"move_ahead", "move_anywhere":
+			_move(p, posmod(t - int(p["pos"]), BoardData.TILE_COUNT), c["kind"] == "move_anywhere")
+			_land(p)
+		"move_festival":
+			festival_tile = t
+			_push({"t": "festival", "tile": t})
+			_log("%s dời Lễ Hội về %s." % [p["name"], BoardData.plain_name(t)])
+
+
+func _upgrade_random(p: Dictionary) -> bool:
+	var cands: Array = []
+	for t in owned_tiles(p["id"]):
+		if BoardData.is_province(t) and level[t] < 3:
+			cands.append(t)
+	if cands.is_empty():
+		return false
+	var t: int = cands[rng.randi_range(0, cands.size() - 1)]
+	_set_tile(t, p["id"], level[t] + 1)
+	_log("%s được nâng lên %s miễn phí." % [BoardData.plain_name(t), LEVEL_NAMES[level[t]]])
+	return true
+
+
+## Người giàu nhất (theo tổng tài sản), bỏ qua người `exclude`. -1 nếu không có ai.
+func _richest(exclude: int) -> int:
+	var best := -1
+	var best_w := -1
+	for oid in alive_players():
+		if oid == exclude:
+			continue
+		var w := net_worth(oid)
+		if w > best_w:
+			best_w = w
+			best = oid
+	return best
+
+
+func _prev_player(pid: int) -> int:
+	var n := players.size()
+	for k in range(1, n):
+		var i := posmod(pid - k, n)
+		if players[i]["alive"]:
+			return i
+	return -1
 
 
 func _give_specialty(p: Dictionary, t: int) -> void:
@@ -994,21 +1394,51 @@ func _add_cash(p: Dictionary, delta: int, reason: String) -> void:
 	_push({"t": "cash", "p": p["id"], "delta": delta, "cash": p["cash"], "reason": reason})
 
 
-func _pay(p: Dictionary, amount: int, to: int, reason: String) -> void:
+func _pay(p: Dictionary, amount: int, to: int, reason: String, to_pot: bool = false) -> void:
 	if amount <= 0 or not p["alive"]:
 		return
 	if p["cash"] < amount:
 		_liquidate(p, amount)
-	if p["cash"] >= amount:
-		_add_cash(p, -amount, reason)
+	var paid := mini(amount, int(p["cash"]))
+	if paid > 0:
+		_add_cash(p, -paid, reason)
 		if to >= 0:
-			_add_cash(players[to], amount, reason)
+			_add_cash(players[to], paid, reason)
+		elif to_pot:
+			_set_pot(charity_pot + paid)
+	if paid < amount:
+		_bankrupt(p)
+
+
+## Khoản phạt (Thuế, thẻ Khí Vận mất tiền): thẻ Miễn Phạt hủy được, tiền vào Quỹ Từ Thiện.
+func _fine(p: Dictionary, amount: int, reason: String) -> void:
+	if amount <= 0:
 		return
-	var left: int = p["cash"]
-	_add_cash(p, -left, reason)
-	if to >= 0 and left > 0:
-		_add_cash(players[to], left, reason)
-	_bankrupt(p)
+	if p["cards"].has("MIEN_PHAT"):
+		_use_card(p, "MIEN_PHAT")
+		_log("%s dùng Miễn Phạt, không phải nộp %s." % [p["name"], BoardData.money(amount)])
+		return
+	_pay(p, amount, -1, reason, true)
+
+
+func _set_pot(v: int) -> void:
+	charity_pot = v
+	_push({"t": "pot", "amount": v})
+
+
+## Đấu xúc xắc 1 viên. Trả về người thắng (hoặc {} nếu hòa).
+func _duel(a: Dictionary, b: Dictionary, amount: int) -> Dictionary:
+	var ra := rng.randi_range(1, 6)
+	var rb := rng.randi_range(1, 6)
+	_push({"t": "duel", "a": a["id"], "b": b["id"], "ra": ra, "rb": rb})
+	if ra == rb:
+		_log("%s %d – %d %s: hòa!" % [a["name"], ra, rb, b["name"]])
+		return {}
+	var win: Dictionary = a if ra > rb else b
+	var lose: Dictionary = b if ra > rb else a
+	_log("%s %d – %d %s: %s thắng %s." % [a["name"], ra, rb, b["name"], win["name"], BoardData.money(amount)])
+	_pay(lose, amount, win["id"], "Đụng độ")
+	return win
 
 
 ## Bán bớt tài sản cho ngân hàng (50% giá trị) để đủ tiền trả. Bán món rẻ nhất trước.

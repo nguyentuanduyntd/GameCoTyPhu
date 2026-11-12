@@ -19,7 +19,7 @@ var _picking: Array = []
 var cam_pivot: Node3D
 var camera: Camera3D
 var cam_yaw := 0.0
-var cam_dist := 25.0
+var cam_dist := 27.0
 var _drag_start := Vector2.ZERO
 var _dragging := false
 var _autotest := false
@@ -309,8 +309,24 @@ func _play(ev: Dictionary) -> void:
 			await get_tree().create_timer(0.12 / speed).timeout
 		"festival":
 			board.set_festival(ev["tile"])
-		"chance":
-			await hud.show_toast("CƠ HỘI\n\n" + String(ev["text"]), 1.6 / speed)
+		"card":
+			var title := "KHÍ VẬN" if ev["deck"] == "khi_van" else "CƠ HỘI"
+			await hud.show_toast("%s — %s\n\n%s" % [title, ev["name"], ev["text"]], 1.9 / speed)
+		"duel":
+			await dice.roll([ev["ra"], ev["rb"]], speed)
+			await hud.show_toast("ĐỤNG ĐỘ\n%s  %d – %d  %s" % [engine.players[ev["a"]]["name"], ev["ra"], ev["rb"], engine.players[ev["b"]]["name"]], 1.2 / speed)
+		"swap":
+			var ta: int = token_tile[ev["a"]]
+			token_tile[ev["a"]] = token_tile[ev["b"]]
+			token_tile[ev["b"]] = ta
+			await _relayout()
+		"pot":
+			board.set_pot(ev["amount"])
+			hud.set_pot(ev["amount"])
+		"charity":
+			await hud.show_toast("%s nhận Quỹ Từ Thiện\n%s xu!" % [engine.players[ev["p"]]["name"], BoardData.money(ev["amount"])], 1.3 / speed)
+		"blackout":
+			await hud.show_toast("CÚP ĐIỆN DIỆN RỘNG\nTiền thuê toàn bàn −50% đến hết vòng", 1.3 / speed)
 		"lottery":
 			var txt := "Xổ số: chọn %d — ra %d\n%s" % [ev["number"], ev["roll"], "TRÚNG LỚN!" if ev["win"] else "Trượt rồi!"]
 			await hud.show_toast(txt, 1.3 / speed)

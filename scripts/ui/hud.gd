@@ -185,7 +185,7 @@ func _player_box(p: Dictionary) -> Dictionary:
 
 
 func _set_cash_label(lbl: Label, cash: int) -> void:
-	lbl.text = BoardData.money(cash) + " Tr"
+	lbl.text = BoardData.money(cash) + " xu"
 
 
 func set_cash(pid: int, cash: int) -> void:
@@ -217,6 +217,11 @@ func refresh_players() -> void:
 				for c in p["cards"]:
 					names.append(CardsData.SKILLS[c]["name"])
 				parts.append("Thẻ: " + ", ".join(names))
+			for d in p["delayed"]:
+				var amt: int = d["amount"]
+				parts.append("%s %s%s sau %d lượt" % [d["text"], "+" if amt > 0 else "−", BoardData.money(absi(amt)), d["turns"]])
+			if p["one_die"]:
+				parts.append("Lượt sau tung 1 viên")
 			if p["in_jail"]:
 				parts.append("ĐANG KẸT XE")
 			if p["train_pending"]:
@@ -237,8 +242,13 @@ func _update_top(n: int) -> void:
 	var en: String = engine.season_event.get("name", "")
 	if en != "":
 		s += "  ·  " + en
+	s += "  ·  Quỹ: %s" % BoardData.money(engine.charity_pot)
 	round_label.text = s
 	round_label.tooltip_text = GameEngine.SEASON_DESC[engine.season]
+
+
+func set_pot(_amount: int) -> void:
+	_update_top(engine.round_num)
 
 
 func add_log(text: String) -> void:
@@ -313,9 +323,10 @@ func show_decision(pend: Dictionary) -> void:
 				_add_btn("Đổi 3 đặc sản cùng miền → thẻ", {"action": "exchange", "kind": "common"})
 		"jail":
 			decision_title.text = "Bạn đang Kẹt Xe"
-			decision_desc.text = "Đã thử %d/3 lần. Tung được đôi để thoát, hoặc gọi xe ôm." % pend["tries"]
+			decision_desc.text = "Tung trượt %d/%d lần (đủ %d lần thì CSGT phân luồng, tự thoát). Tung đôi để thoát, gọi xe ôm, hoặc liều đi đường tắt." % [pend["tries"], pend["max_tries"], pend["max_tries"]]
 			if int(p["cash"]) >= int(pend["fee"]):
 				_add_btn("Gọi xe ôm (%s)" % BoardData.money(pend["fee"]), {"action": "pay"})
+			_add_btn("Đường tắt (chẵn thoát, lẻ kẹt thêm)", {"action": "shortcut"})
 			_add_btn("Tung tìm đôi", {"action": "roll"}, true)
 		"train":
 			decision_title.text = "Tàu Thống Nhất"
@@ -367,11 +378,29 @@ func show_decision(pend: Dictionary) -> void:
 			if opts.has("buy_specialty"):
 				_add_btn("Mua 1 đặc sản (%s)" % BoardData.money(GameEngine.SPECIALTY_PRICE), {"action": "buy_specialty"})
 			_add_btn("Rời chợ", {"action": "pass"})
-		"chance_pick":
-			decision_title.text = "Cơ Hội — chọn 1 thẻ"
+		"card_pick":
+			decision_title.text = "Cơ Hội — chọn 1 trong 2 thẻ"
 			var cards: Array = pend["cards"]
 			for i in cards.size():
-				_add_btn(CardsData.CHANCE[cards[i]]["text"], {"action": "pick", "index": i}, true)
+				var c := CardsData.card(pend["deck"], cards[i])
+				_add_btn("%s: %s" % [c["name"], c["text"]], {"action": "pick", "index": i}, true)
+		"card_confirm":
+			decision_title.text = String(pend["name"])
+			decision_desc.text = String(pend["text"])
+			_add_btn("Đồng ý", {"action": "accept"}, true)
+			_add_btn("Bỏ qua", {"action": "pass"})
+		"card_player":
+			decision_title.text = String(pend["name"])
+			decision_desc.text = String(pend["text"]) + " Chọn người chơi:"
+			for oid in pend["options"]:
+				var op: Dictionary = engine.players[oid]
+				_add_btn("%s (%s xu)" % [op["name"], BoardData.money(op["cash"])], {"action": "pick_player", "target": oid}, true)
+			_add_btn("Bỏ qua", {"action": "pass"})
+		"card_tile":
+			decision_title.text = String(pend["name"])
+			decision_desc.text = String(pend["text"]) + " Bấm ô trên bàn cờ hoặc chọn trong danh sách."
+			_show_tile_picker(pend["options"], func(t): _emit({"action": "pick_tile", "tile": t}))
+			_add_btn("Bỏ qua", {"action": "pass"})
 
 
 func _tile_desc(t: int) -> String:
@@ -482,7 +511,7 @@ func show_game_over(ev: Dictionary) -> void:
 		var pid: int = ranking[i]
 		var l := Label.new()
 		var w: int = worths[i]
-		l.text = "%d. %s — %s" % [i + 1, engine.players[pid]["name"], (BoardData.money(w) + " Tr") if w > 0 else "Phá sản"]
+		l.text = "%d. %s — %s" % [i + 1, engine.players[pid]["name"], (BoardData.money(w) + " xu") if w > 0 else "Phá sản"]
 		l.add_theme_color_override("font_color", Color(colors[pid]).lightened(0.3))
 		v.add_child(l)
 	var row := HBoxContainer.new()

@@ -18,6 +18,7 @@ func _init() -> void:
 	var total_actions := 0
 	var bankrupt_total := 0
 	var errors := 0
+	var pot_total := 0
 	var t0 := Time.get_ticks_msec()
 	for g in games:
 		var e := GameEngine.new()
@@ -47,6 +48,7 @@ func _init() -> void:
 		reasons[e.win_reason] = reasons.get(e.win_reason, 0) + 1
 		total_rounds += mini(e.round_num, e.max_rounds)
 		bankrupt_total += e.eliminated.size()
+		pot_total += e.charity_pot
 		var wch: String = e.players[e.winner]["character"]
 		char_wins[wch] = char_wins.get(wch, 0) + 1
 		diff_wins[e.players[e.winner]["difficulty"]] += 1
@@ -54,6 +56,7 @@ func _init() -> void:
 	print("Lỗi: %d" % errors)
 	print("Lý do thắng: %s" % reasons)
 	print("Số vòng TB: %.1f | Hành động TB: %.0f | Phá sản TB/ván: %.2f" % [float(total_rounds) / games, float(total_actions) / games, float(bankrupt_total) / games])
+	print("Quỹ Từ Thiện cuối ván TB: %.0f" % (float(pot_total) / games))
 	print("Thắng theo độ khó (Dễ/Thường/Khó): %s" % [diff_wins])
 	for ch in chars:
 		print("  %-12s thắng %3d / %3d lượt tham gia (%.1f%%)" % [ch, char_wins.get(ch, 0), char_games.get(ch, 0), 100.0 * char_wins.get(ch, 0) / maxi(1, char_games.get(ch, 0))])

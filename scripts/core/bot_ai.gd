@@ -17,6 +17,9 @@ static func decide(e: GameEngine, pend: Dictionary) -> Dictionary:
 			var late: bool = e.round_num > int(e.max_rounds * 0.6)
 			if cash >= fee + reserve * 2 and (not late or diff == 0):
 				return {"action": "pay"}
+			# Cuối ván ngồi kẹt xe an toàn hơn; đầu ván thử đường tắt (50%) để được đi tiếp
+			if not late and diff >= 1:
+				return {"action": "shortcut"}
 			return {"action": "roll"}
 		"train":
 			var fee: int = pend["fee"]
@@ -92,11 +95,17 @@ static func decide(e: GameEngine, pend: Dictionary) -> Dictionary:
 			if opts.has("buy_specialty") and diff >= 1 and cash > 1000:
 				return {"action": "buy_specialty"}
 			return {"action": "pass"}
-		"chance_pick":
+		"card_pick":
 			var cards: Array = pend["cards"]
-			var a: int = CardsData.CHANCE[cards[0]]["value"]
-			var b: int = CardsData.CHANCE[cards[1]]["value"]
+			var a: int = CardsData.card(pend["deck"], cards[0])["value"]
+			var b: int = CardsData.card(pend["deck"], cards[1])["value"]
 			return {"action": "pick", "index": 0 if a >= b else 1}
+		"card_confirm":
+			return _card_confirm(e, pid, pend, reserve)
+		"card_player":
+			return _card_player(e, pid, pend)
+		"card_tile":
+			return _card_tile(e, pid, pend, reserve)
 	return {"action": "pass"}
 
 
@@ -134,7 +143,7 @@ static func tile_score(e: GameEngine, pid: int, t: int) -> float:
 	var p: Dictionary = e.players[pid]
 	var td := BoardData.tile(t)
 	var ty: int = td["type"]
-	if ty == BoardData.T.PROVINCE or ty == BoardData.T.INFRA:
+	if ty == BoardData.T.PROVINCE or ty == BoardData.T.INFRA or ty == BoardData.T.TOLL:
 		var o: int = e.owner[t]
 		if o == -1:
 			if int(p["cash"]) < e.buy_price(pid, t):
@@ -150,8 +159,12 @@ static func tile_score(e: GameEngine, pid: int, t: int) -> float:
 		return -float(e.rent(t))
 	if ty == BoardData.T.START:
 		return 200.0
-	if ty == BoardData.T.CHANCE:
-		return 15.0
+	if ty == BoardData.T.KHI_VAN:
+		return 25.0
+	if ty == BoardData.T.CO_HOI:
+		return 60.0
+	if ty == BoardData.T.CHARITY:
+		return float(e.charity_pot)
 	if ty == BoardData.T.TAX:
 		return -100.0
 	if ty == BoardData.T.JAIL:
@@ -169,3 +182,73 @@ static func _reserve(e: GameEngine, pid: int) -> int:
 	var diff: int = e.players[pid]["difficulty"]
 	var base: int = [60, 150, 220][diff]
 	return base + e.round_num * 6
+
+
+static func _card_confirm(e: GameEngine, pid: int, pend: Dictionary, reserve: int) -> Dictionary:
+	var c: Dictionary = CardsData.card(pend["deck"], pend["idx"])
+	var cash: int = e.players[pid]["cash"]
+	var yes := false
+	match String(c["kind"]):
+		"invest", "gamble":
+			yes = cash - int(c["cost"]) >= reserve
+		"loan":
+			yes = cash < reserve * 2 and e.round_num + 3 < e.max_rounds
+		"duel_richest":
+			yes = cash >= int(c["lose"]) + reserve
+		"sell_specialties":
+			yes = e.players[pid]["specialties"].size() >= 4 or cash < reserve
+	return {"action": "accept"} if yes else {"action": "pass"}
+
+
+static func _card_player(e: GameEngine, pid: int, pend: Dictionary) -> Dictionary:
+	var c: Dictionary = CardsData.card(pend["deck"], pend["idx"])
+	var opts: Array = pend["options"]
+	var best: int = opts[0]
+	var best_score := -INF
+	for oid in opts:
+		var score := 0.0
+		match String(c["kind"]):
+			"swap_pos":
+				# Đổi tới vị trí gần Km 0 nhất phía trước để sớm nhận lương
+				score = -float(posmod(BoardData.START_TILE - int(e.players[oid]["pos"]), BoardData.TILE_COUNT))
+			_:
+				score = float(e.players[oid]["cash"])
+		if score > best_score:
+			best_score = score
+			best = oid
+	if c["kind"] == "swap_pos" and best_score < -float(posmod(BoardData.START_TILE - int(e.players[pid]["pos"]), BoardData.TILE_COUNT)):
+		return {"action": "pass"}
+	return {"action": "pick_player", "target": best}
+
+
+static func _card_tile(e: GameEngine, pid: int, pend: Dictionary, reserve: int) -> Dictionary:
+	var c: Dictionary = CardsData.card(pend["deck"], pend["idx"])
+	var cash: int = e.players[pid]["cash"]
+	var best := -1
+	var best_score := -INF
+	for t in pend["options"]:
+		var score := 0.0
+		match String(c["kind"]):
+			"buy_remote", "build_anywhere":
+				var price := e.card_price(pid, t, c)
+				if cash - price < reserve:
+					continue
+				score = float(BoardData.tile(t)["price"])
+				if BoardData.is_province(t):
+					var g: int = BoardData.tile(t)["group"]
+					if e.owner[t] == -1 and e.group_count(pid, g) + 1 >= e.group_tiles(g).size():
+						score += 300.0
+			"sell_bonus":
+				if cash >= reserve:
+					continue
+				score = -float(BoardData.tile(t)["price"])
+			"move_ahead", "move_anywhere":
+				score = tile_score(e, pid, t)
+			"move_festival":
+				score = float(e.rent(t))
+		if score > best_score:
+			best_score = score
+			best = t
+	if best < 0:
+		return {"action": "pass"}
+	return {"action": "pick_tile", "tile": best}
