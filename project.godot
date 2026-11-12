@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.7", "Mobile")
 
 Audio="*res://scripts/audio.gd"
 Global="*res://scripts/global.gd"
+Net="*res://scripts/net/net_client.gd"
 
 [display]
 

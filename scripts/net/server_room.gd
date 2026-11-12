@@ -243,6 +243,20 @@ func mark_ready(seat: int, n: int) -> void:
 		seats[seat]["ready_n"] = maxi(int(seats[seat]["ready_n"]), n)
 
 
+## Gửi trạng thái phòng cho từng người, kèm "you" = ghế của chính họ.
+func broadcast_room() -> void:
+	for i in seats.size():
+		var st: Dictionary = seats[i]
+		if not st["is_bot"] and st["connected"]:
+			server.send(st["peer"], room_state_for(i))
+
+
+func room_state_for(seat: int) -> Dictionary:
+	var rs := room_state()
+	rs["you"] = seat
+	return rs
+
+
 func broadcast(msg: Dictionary) -> void:
 	for s in seats:
 		if not s["is_bot"] and s["connected"]:

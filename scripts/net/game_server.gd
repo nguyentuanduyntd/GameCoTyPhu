@@ -109,7 +109,7 @@ func _drop(id: int) -> void:
 		var seat := r.seat_of_peer(id)
 		r.on_disconnect(seat)
 		if not r.started:
-			r.broadcast(r.room_state())
+			r.broadcast_room()
 		_log("%s rời kết nối (phòng %s)." % [info["name"], code])
 
 
@@ -152,7 +152,7 @@ func _handle(id: int, msg: Dictionary) -> void:
 			r.host_seat = 0
 			info["room"] = code
 			_log("%s tạo phòng %s." % [info["name"], code])
-			r.broadcast(r.room_state())
+			r.broadcast_room()
 		"join_room":
 			var code := String(msg.get("code", "")).strip_edges().to_upper()
 			if not _rooms.has(code):
@@ -173,7 +173,7 @@ func _handle(id: int, msg: Dictionary) -> void:
 					(_peers[old_peer]["ws"] as WebSocketPeer).close()
 				info["room"] = code
 				r.on_rejoin(seat, id)
-				send(id, r.room_state())
+				send(id, r.room_state_for(seat))
 				send(id, r.start_message(seat))
 				var tm := r.current_timer()
 				if not tm.is_empty():
@@ -188,14 +188,14 @@ func _handle(id: int, msg: Dictionary) -> void:
 				return
 			info["room"] = code
 			_log("%s vào phòng %s." % [info["name"], code])
-			r.broadcast(r.room_state())
+			r.broadcast_room()
 		"leave_room":
 			_leave(id)
 		"set_character":
 			if room and not room.started:
 				if not room.set_character(room.seat_of_peer(id), String(msg.get("character", ""))):
 					_error(id, "Nhân vật này đã có người chọn.")
-				room.broadcast(room.room_state())
+				room.broadcast_room()
 		"add_bot", "remove_bot", "set_options", "start_game":
 			if room == null or room.started:
 				return
@@ -218,7 +218,7 @@ func _handle(id: int, msg: Dictionary) -> void:
 						_error(id, err)
 						return
 					_log("Phòng %s bắt đầu ván (%d người)." % [room.code, room.seats.size()])
-			room.broadcast(room.room_state())
+			room.broadcast_room()
 		"action":
 			if room == null:
 				return
@@ -243,4 +243,4 @@ func _leave(id: int) -> void:
 		room.on_disconnect(seat)
 	else:
 		room.remove_seat(seat)
-		room.broadcast(room.room_state())
+		room.broadcast_room()

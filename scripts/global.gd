@@ -26,6 +26,14 @@ var cinematic: int = 2   # camera điện ảnh khi đi: 0 tắt, 1 chỉ lượ
 var graphics_quality: int = 1 if OS.has_feature("mobile") else 2
 const QUALITY_NAMES := ["Thấp", "Vừa", "Cao"]
 
+# Online
+## Địa chỉ server (ws://máy:cổng hoặc wss://... của tunnel). Lưu lại cho lần sau.
+var server_url: String = "ws://localhost:8910"
+## Mã định danh máy này (để vào lại đúng chỗ khi rớt mạng). Tạo một lần, lưu lại.
+var net_token: String = ""
+## Ván sắp vào là ván online (game.gd đọc); thông tin bắt đầu ván nằm ở Net.start_info.
+var online: bool = false
+
 
 func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--server"):
@@ -43,6 +51,11 @@ func _ready() -> void:
 			graphics_quality = clampi(int(arg.substr(10)), 0, 2)
 		if arg.begins_with("--rounds="):   # kiểm thử: ván ngắn để xem màn kết thúc
 			max_rounds = maxi(1, int(arg.substr(9)))
+	if net_token == "":
+		var r := RandomNumberGenerator.new()
+		r.randomize()
+		net_token = "%08x%08x" % [r.randi(), r.randi()]
+		save_settings()
 	apply_settings()
 	# Theme gốc cho toàn bộ giao diện: gộp vào theme mặc định của Godot để mọi Control
 	# (kể cả nằm dưới CanvasLayer — vốn không kế thừa theme của cửa sổ) đều dùng chung
@@ -71,6 +84,8 @@ func load_settings() -> void:
 	cinematic = cf.get_value("graphics", "cinematic", cinematic)
 	buy_fx = cf.get_value("graphics", "buy_fx", buy_fx)
 	graphics_quality = cf.get_value("graphics", "quality", graphics_quality)
+	server_url = cf.get_value("online", "server", server_url)
+	net_token = cf.get_value("online", "token", net_token)
 
 
 func save_settings() -> void:
@@ -89,6 +104,8 @@ func save_settings() -> void:
 	cf.set_value("graphics", "cinematic", cinematic)
 	cf.set_value("graphics", "buy_fx", buy_fx)
 	cf.set_value("graphics", "quality", graphics_quality)
+	cf.set_value("online", "server", server_url)
+	cf.set_value("online", "token", net_token)
 	cf.save(SETTINGS_PATH)
 
 

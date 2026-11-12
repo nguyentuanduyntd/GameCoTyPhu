@@ -19,6 +19,19 @@ var _rounds: OptionButton
 var _player_char: Character3D
 var _player_slot := 0
 var _cam: Camera3D
+# Online
+const THINK_CHOICES := [15, 30, 60]
+var _offline_box: VBoxContainer
+var _room_box: VBoxContainer
+var _room_title: Label
+var _room_info: Label
+var _room_host_row: HBoxContainer
+var _room_rounds: OptionButton
+var _room_diff: OptionButton
+var _room_think: OptionButton
+var _room_start: Button
+var _room_wait: Label
+var _dialog: Control
 
 
 func _ready() -> void:
@@ -38,8 +51,16 @@ func _ready() -> void:
 	Global.fix_bots()
 	_build_world()
 	_build_ui()
-	_rebuild_row()
+	Net.room_updated.connect(_on_room)
+	Net.game_started.connect(_on_game_started)
+	Net.disconnected.connect(_on_net_lost)
+	Net.error_received.connect(func(t): if _in_room(): _flash(t))
+	Net.notice.connect(func(t): if _in_room(): _flash(t))
+	_on_room(Net.room)
 	Audio.play_music("music_lobby")
+	for a in args:
+		if a == "--roomdemo":
+			_room_demo()
 	for a in args:
 		if a.begins_with("--menushot="):
 			_shot(a.substr(11))
@@ -152,33 +173,53 @@ func _build_world() -> void:
 func _rebuild_row() -> void:
 	for c in _row.get_children():
 		c.queue_free()
-	var n := Global.bot_count + 1
-	_player_slot = n / 2
+	# Danh sách người đứng trên sân khấu: ván với máy, hoặc đúng những người trong phòng online
+	var entries: Array = []
+	if _in_room():
+		var seats: Array = Net.room["seats"]
+		for i in seats.size():
+			var st: Dictionary = seats[i]
+			var note := ""
+			if i == int(Net.room.get("host", -1)):
+				note = "Chủ phòng"
+			elif st["is_bot"]:
+				note = "Máy"
+			if not st["connected"]:
+				note = "Mất kết nối"
+			entries.append({"name": st["name"], "char": st["character"], "color": i, "me": i == int(Net.room.get("you", -1)), "note": note})
+	else:
+		var n := Global.bot_count + 1
+		var me_slot := n / 2
+		var bot_i := 0
+		for slot in n:
+			if slot == me_slot:
+				entries.append({"name": Global.player_name, "char": Global.character, "color": 0, "me": true, "note": ""})
+			else:
+				entries.append({"name": Global.BOT_NAMES[bot_i], "char": Global.bot_characters[bot_i], "color": bot_i + 1, "me": false, "note": ""})
+				bot_i += 1
+	var n := entries.size()
 	# Lùi camera theo số người để cả hàng nằm gọn trong khung hình
-	var dist := 4.6 + n * 1.0
-	create_tween().tween_property(_cam, "position", Vector3(0, 2.0 + n * 0.05, dist), 0.4).set_trans(Tween.TRANS_SINE)
+	var nv := maxi(n, 4)   # phòng ít người vẫn giữ khoảng nhìn như ván 4 người
+	var dist := 4.6 + nv * 1.0
+	create_tween().tween_property(_cam, "position", Vector3(0, 2.0 + nv * 0.05, dist), 0.4).set_trans(Tween.TRANS_SINE)
 	if _cam.position == Vector3.ZERO:
-		_cam.position = Vector3(0, 2.0 + n * 0.05, dist)
+		_cam.position = Vector3(0, 2.0 + nv * 0.05, dist)
 	_cam.look_at_from_position(_cam.position, Vector3(0, 1.0, 0), Vector3.UP)
-	var bot_i := 0
 	for slot in n:
+		var en: Dictionary = entries[slot]
 		var x := (slot - (n - 1) / 2.0) * SPACING
-		var is_player := slot == _player_slot
-		var pid := 0 if is_player else bot_i + 1
-		var char_id: String = Global.character if is_player else Global.bot_characters[bot_i]
-		var name: String = Global.player_name if is_player else Global.BOT_NAMES[bot_i]
-		if not is_player:
-			bot_i += 1
-		var col := Color(PLAYER_COLORS[pid])
+		var col := Color(PLAYER_COLORS[int(en["color"]) % PLAYER_COLORS.size()])
 		var podium := _cyl(0.55, 0.45, "#5d4037", Vector3(x, 0.22, 0.4))
 		_row.add_child(podium)
-		_row.add_child(_cyl(0.58, 0.06, PLAYER_COLORS[pid], Vector3(x, 0.47, 0.4)))
-		var ch := Character3D.new().setup(char_id, col)
+		_row.add_child(_cyl(0.58, 0.06, PLAYER_COLORS[int(en["color"]) % PLAYER_COLORS.size()], Vector3(x, 0.47, 0.4)))
+		var ch := Character3D.new().setup(en["char"], col)
 		ch.position = Vector3(x, 0.5, 0.4)
 		ch.scale = Vector3.ONE * 1.6
 		_row.add_child(ch)
 		var tag := Label3D.new()
-		tag.text = "%s\n%s" % [name, CardsData.character(char_id)["name"]]
+		tag.text = "%s\n%s" % [en["name"], CardsData.character(en["char"])["name"]]
+		if en["note"] != "":
+			tag.text += "\n(" + en["note"] + ")"
 		tag.font_size = 40
 		tag.pixel_size = 0.0036
 		tag.width = SPACING * 0.95 / tag.pixel_size
@@ -187,9 +228,10 @@ func _rebuild_row() -> void:
 		tag.modulate = col.lightened(0.45)
 		tag.outline_size = 10
 		tag.outline_modulate = Color(0, 0, 0, 0.9)
-		tag.position = Vector3(x, 2.1, 0.4)
+		tag.position = Vector3(x, 2.1 + (0.14 if en["note"] != "" else 0.0), 0.4)
 		_row.add_child(tag)
-		if is_player:
+		if en["me"]:
+			_player_slot = slot
 			_player_char = ch
 			_spot.position = Vector3(x, 5.5, 0.4)
 			var you := Label3D.new()
@@ -199,7 +241,7 @@ func _rebuild_row() -> void:
 			you.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 			you.modulate = Color("#ffd54f")
 			you.outline_size = 10
-			you.position = Vector3(x, 2.55, 0.4)
+			you.position = Vector3(x, 2.55 + (0.28 if en["note"] != "" else 0.0), 0.4)
 			_row.add_child(you)
 	_update_char_text()
 
@@ -260,11 +302,17 @@ func _build_ui() -> void:
 	nxt.add_theme_font_size_override("font_size", 22)
 	pick.add_child(nxt)
 
+	# Phần chơi với máy (ẩn khi đang ở phòng online)
+	_offline_box = VBoxContainer.new()
+	_offline_box.add_theme_constant_override("separation", 8)
+	v.add_child(_offline_box)
+	_build_room_box(v)
+
 	# Tuỳ chọn
 	var opts := HBoxContainer.new()
 	opts.alignment = BoxContainer.ALIGNMENT_CENTER
 	opts.add_theme_constant_override("separation", 10)
-	v.add_child(opts)
+	_offline_box.add_child(opts)
 	opts.add_child(_label("Tên:"))
 	_name_edit = LineEdit.new()
 	_name_edit.text = Global.player_name
@@ -307,17 +355,24 @@ func _build_ui() -> void:
 	var play_row := HBoxContainer.new()
 	play_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	play_row.add_theme_constant_override("separation", 10)
-	v.add_child(play_row)
+	_offline_box.add_child(play_row)
 	var start := _button("CHƠI VỚI MÁY", _on_start)
 	start.custom_minimum_size = Vector2(300, 54)
 	start.theme_type_variation = "PrimaryButton"
 	start.add_theme_font_size_override("font_size", 24)
 	play_row.add_child(start)
-	for t in ["Tạo phòng", "Nhập mã phòng", "Ghép trận", "Leo hạng"]:
+	for t in ["Tạo phòng", "Nhập mã phòng"]:
+		var mode := "create" if t == "Tạo phòng" else "join"
+		var ob := _button(t, func(): _open_connect(mode))
+		ob.custom_minimum_size = Vector2(150, 54)
+		ob.theme_type_variation = "AccentButton"
+		ob.add_theme_font_size_override("font_size", 17)
+		play_row.add_child(ob)
+	for t in ["Ghép trận", "Leo hạng"]:
 		var b := Button.new()
 		b.text = t + "\n(sắp có)"
 		b.disabled = true
-		b.custom_minimum_size = Vector2(118, 54)
+		b.custom_minimum_size = Vector2(110, 54)
 		b.add_theme_font_size_override("font_size", 13)
 		play_row.add_child(b)
 
@@ -328,6 +383,12 @@ func _cycle_character(dir: int) -> void:
 		ids.append(c["id"])
 	var i := ids.find(Global.character)
 	Global.character = ids[posmod(i + dir, ids.size())]
+	if _in_room():
+		# trong phòng: xin server đổi (trùng người khác thì server từ chối, giữ nhân vật cũ)
+		Net.send({"t": "set_character", "character": Global.character})
+		Audio.play("click")
+		_update_char_text()
+		return
 	# Nếu trùng nhân vật của máy thì đổi máy sang nhân vật khác
 	Global.fix_bots()
 	Audio.play("click")
@@ -340,6 +401,168 @@ func _update_char_text() -> void:
 	var c := CardsData.character(Global.character)
 	_char_title.text = c["name"]
 	_char_desc.text = "Kỹ năng: " + String(c["desc"])
+
+
+# ---------------------------------------------------------------- phòng online
+
+func _in_room() -> bool:
+	return not Net.room.is_empty() and Net.room.has("seats")
+
+
+func _is_host() -> bool:
+	return _in_room() and int(Net.room.get("host", -1)) == int(Net.room.get("you", -2))
+
+
+func _build_room_box(v: VBoxContainer) -> void:
+	_room_box = VBoxContainer.new()
+	_room_box.add_theme_constant_override("separation", 8)
+	_room_box.visible = false
+	v.add_child(_room_box)
+	var top := HBoxContainer.new()
+	top.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_theme_constant_override("separation", 12)
+	_room_box.add_child(top)
+	_room_title = Label.new()
+	_room_title.theme_type_variation = "TitleLabel"
+	top.add_child(_room_title)
+	top.add_child(_button("Sao chép mã", func():
+		DisplayServer.clipboard_set(String(Net.room.get("code", "")))
+		_flash("Đã sao chép mã phòng — gửi cho bạn bè nhé!")))
+	_room_info = Label.new()
+	_room_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_room_info.theme_type_variation = "CaptionLabel"
+	_room_box.add_child(_room_info)
+	_room_host_row = HBoxContainer.new()
+	_room_host_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_room_host_row.add_theme_constant_override("separation", 10)
+	_room_box.add_child(_room_host_row)
+	_room_host_row.add_child(_button("+ Thêm máy", func(): Net.send({"t": "add_bot"})))
+	_room_host_row.add_child(_button("− Bớt máy", _remove_last_bot))
+	_room_host_row.add_child(_label("Số vòng:"))
+	_room_rounds = OptionButton.new()
+	for r in ROUND_CHOICES:
+		_room_rounds.add_item(str(r))
+	_room_rounds.item_selected.connect(func(i): Net.send({"t": "set_options", "options": {"rounds": ROUND_CHOICES[i]}}))
+	_room_host_row.add_child(_room_rounds)
+	_room_host_row.add_child(_label("Máy:"))
+	_room_diff = OptionButton.new()
+	for d in ["Dễ", "Thường", "Khó"]:
+		_room_diff.add_item(d)
+	_room_diff.item_selected.connect(func(i): Net.send({"t": "set_options", "options": {"difficulty": i}}))
+	_room_host_row.add_child(_room_diff)
+	_room_host_row.add_child(_label("Giờ suy nghĩ:"))
+	_room_think = OptionButton.new()
+	for t in THINK_CHOICES:
+		_room_think.add_item("%ds" % t)
+	_room_think.item_selected.connect(func(i): Net.send({"t": "set_options", "options": {"think": THINK_CHOICES[i]}}))
+	_room_host_row.add_child(_room_think)
+	var bottom := HBoxContainer.new()
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_theme_constant_override("separation", 12)
+	_room_box.add_child(bottom)
+	_room_start = _button("BẮT ĐẦU", func(): Net.send({"t": "start_game"}))
+	_room_start.theme_type_variation = "PrimaryButton"
+	_room_start.custom_minimum_size = Vector2(260, 54)
+	_room_start.add_theme_font_size_override("font_size", 24)
+	bottom.add_child(_room_start)
+	_room_wait = Label.new()
+	_room_wait.text = "Chờ chủ phòng bắt đầu ván..."
+	bottom.add_child(_room_wait)
+	var leave := _button("Rời phòng", func():
+		Net.leave_room()
+		Net.close()
+		_on_room({}))
+	leave.custom_minimum_size = Vector2(140, 54)
+	bottom.add_child(leave)
+
+
+func _remove_last_bot() -> void:
+	var seats: Array = Net.room.get("seats", [])
+	for i in range(seats.size() - 1, -1, -1):
+		if seats[i]["is_bot"]:
+			Net.send({"t": "remove_bot", "seat": i})
+			return
+
+
+func _open_connect(mode: String) -> void:
+	if _dialog and is_instance_valid(_dialog):
+		return
+	var d := OnlineConnect.new(mode)
+	_dialog = d
+	_ui.add_child(d)
+
+
+func _on_room(room: Dictionary) -> void:
+	var in_room := _in_room()
+	_offline_box.visible = not in_room
+	_room_box.visible = in_room
+	_name_edit.editable = not in_room
+	if in_room:
+		var seats: Array = room["seats"]
+		var me: int = int(room.get("you", -1))
+		if me >= 0 and me < seats.size():
+			Global.character = seats[me]["character"]
+		_room_title.text = "Phòng  %s" % room["code"]
+		var humans := 0
+		for st in seats:
+			if not st["is_bot"]:
+				humans += 1
+		_room_info.text = "%d/6 chỗ · %d người thật · %s" % [seats.size(), humans, "bạn là chủ phòng" if _is_host() else "gửi mã cho bạn bè để cùng vào"]
+		var host := _is_host()
+		_room_host_row.visible = host
+		_room_start.visible = host
+		_room_start.disabled = seats.size() < 2
+		_room_wait.visible = not host
+		var o: Dictionary = room.get("options", {})
+		_room_rounds.select(maxi(0, ROUND_CHOICES.find(int(o.get("rounds", 25)))))
+		_room_diff.select(clampi(int(o.get("difficulty", 1)), 0, 2))
+		_room_think.select(maxi(0, THINK_CHOICES.find(int(o.get("think", 30)))))
+	_rebuild_row()
+
+
+func _on_game_started(_info: Dictionary) -> void:
+	Global.online = true
+	Audio.play("turn")
+	get_tree().change_scene_to_file("res://scenes/game.tscn")
+
+
+func _on_net_lost() -> void:
+	if _room_box.visible:
+		_flash("Mất kết nối tới server.")
+	Net.room = {}
+	_on_room({})
+
+
+func _flash(text: String) -> void:
+	_room_info.text = text
+	var info := _room_info
+	get_tree().create_timer(3.0).timeout.connect(func():
+		if is_instance_valid(info) and _in_room():
+			_on_room(Net.room))
+	if not _in_room():
+		var l := Label.new()
+		l.text = text
+		l.theme_type_variation = "LightLabel"
+		l.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		l.offset_top = 70
+		l.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_ui.add_child(l)
+		get_tree().create_timer(3.0).timeout.connect(l.queue_free)
+
+
+## Kiểm thử hình ảnh: tự bật server trong máy, tạo phòng, thêm 2 máy (dùng với --menushot).
+func _room_demo() -> void:
+	var srv := GameServer.new()
+	add_child(srv)
+	srv.start(8915)
+	Net.player_name = Global.player_name
+	Net.character = Global.character
+	Net.token = Global.net_token
+	Net.connect_to("ws://127.0.0.1:8915")
+	Net.create_room({"rounds": 20, "difficulty": 1})
+	await get_tree().create_timer(0.5).timeout
+	Net.send({"t": "add_bot"})
+	Net.send({"t": "add_bot"})
 
 
 func _open_settings() -> void:
