@@ -22,6 +22,7 @@ var _season := 0
 var _storm := false
 var _blackout := false
 var _lightning_t := 0.0
+var _weather_on := true
 
 
 func setup(p_sun: DirectionalLight3D, p_env: Environment, p_sky: ProceduralSkyMaterial, half_size: float) -> void:
@@ -47,6 +48,7 @@ func _process(delta: float) -> void:
 		if _lightning_t <= 0.0:
 			_lightning_t = randf_range(1.5, 4.0)
 			var base: float = SUN[_season]["energy"] * 0.45
+			Audio.play("thunder", 0.15, -8.0)
 			var tw := create_tween()
 			tw.tween_property(sun, "light_energy", 2.6, 0.05)
 			tw.tween_property(sun, "light_energy", base, 0.25)
@@ -69,12 +71,25 @@ func set_season(s: int, ev: Dictionary) -> void:
 	env.fog_enabled = fog > 0.0
 	env.fog_density = fog
 	env.fog_light_color = Color("#c9d3dc")
-	_petals.emitting = s == 0 and not _storm
-	_leaves.emitting = s == 2 and not _storm
-	_rain.emitting = s == 3 or _storm
+	_update_particles()
 	_rain.amount = 900 if _storm else 350
 	if s == 0:
 		fireworks()
+
+
+func set_weather_enabled(on: bool) -> void:
+	_weather_on = on
+	if _petals:
+		_update_particles()
+
+
+func _update_particles() -> void:
+	_petals.emitting = _weather_on and _season == 0 and not _storm
+	_leaves.emitting = _weather_on and _season == 2 and not _storm
+	_rain.emitting = _weather_on and (_season == 3 or _storm)
+	_petals.visible = _weather_on
+	_leaves.visible = _weather_on
+	_rain.visible = _weather_on
 
 
 func set_blackout(on: bool) -> void:

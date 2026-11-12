@@ -67,10 +67,16 @@ func _ready() -> void:
 	hud.set_speed_display(speed)
 	hud.action_chosen.connect(_on_human_action)
 	hud.pick_mode.connect(_on_pick_mode)
-	hud.menu_requested.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
+	hud.menu_requested.connect(func(): get_tree().change_scene_to_file("res://scenes/lobby.tscn"))
 	hud.restart_requested.connect(func(): get_tree().reload_current_scene())
 	hud.speed_changed.connect(_on_speed_changed)
 	hud.cam_toggled.connect(_on_cam_toggled)
+	cam_auto = Global.cam_auto
+	hud.set_cam_auto(cam_auto)
+	Global.settings_changed.connect(_apply_settings)
+	_apply_settings()
+	if not _autotest:
+		Audio.play_music("music_game_a")
 	_relayout(true)
 	hud.refresh_players()
 	# Chế độ kiểm thử hình ảnh: dựng sẵn mọi danh thắng, đặt camera theo tham số
@@ -201,6 +207,15 @@ func _focus_tile(t: int) -> void:
 	_cam_tween.tween_method(func(v: float): cam_yaw = v; _update_camera(), cam_yaw, cam_yaw + diff, 0.6 / speed).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
+func _apply_settings() -> void:
+	sun.shadow_enabled = Global.shadows
+	season_fx.set_weather_enabled(Global.weather_fx)
+
+
+func _season_music(s: int) -> String:
+	return "music_game_a" if s <= 1 else "music_game_b"
+
+
 func _on_cam_toggled(on: bool) -> void:
 	cam_auto = on
 	if on and engine and not engine.pending.is_empty():
@@ -253,6 +268,8 @@ func _move_token(pid: int, path: Array, fast: bool) -> void:
 		tw.tween_property(tok, "position", mid, step * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tw.tween_property(tok, "position", target, step * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		await tw.finished
+		if not fast or path.size() <= 12:
+			Audio.play("step", 0.15, -6.0)
 		token_tile[pid] = t
 	await _relayout()
 
@@ -297,6 +314,8 @@ func _play(ev: Dictionary) -> void:
 		"log":
 			hud.add_log(ev["text"])
 		"turn":
+			if ev["p"] == human_id and not engine.players[human_id]["is_bot"]:
+				Audio.play("turn")
 			hud.set_current(ev["p"])
 			hud.refresh_players()
 			_focus_tile(token_tile[ev["p"]])
@@ -306,31 +325,42 @@ func _play(ev: Dictionary) -> void:
 		"season":
 			board.set_season(ev["season"], ev["event"])
 			season_fx.set_season(ev["season"], ev["event"])
+			if not _autotest:
+				Audio.play_music(_season_music(ev["season"]), 2.5)
+			if String(ev["event"].get("type", "")) == "storm":
+				Audio.play("thunder")
 			hud.set_season(ev["season"], ev["event"])
 		"cash":
 			hud.set_cash(ev["p"], ev["cash"])
+			Audio.play("coin" if int(ev["delta"]) > 0 else "pay", 0.05, -4.0)
 			var d: int = ev["delta"]
 			_float_text(ev["p"], ("+" if d > 0 else "") + BoardData.money(d), Color("#76ff03") if d > 0 else Color("#ff5252"))
 		"dice":
+			Audio.play("dice", 0.08)
 			await dice.roll(ev["d"], speed)
 		"move":
 			await _move_token(ev["p"], ev["path"], ev["fast"])
 			_focus_tile(token_tile[ev["p"]])
 		"jail":
+			Audio.play("horn")
 			token_tile[ev["p"]] = BoardData.JAIL_TILE
 			await _relayout()
 			await hud.show_toast("%s bị KẸT XE!" % engine.players[ev["p"]]["name"], 0.9 / speed)
 		"tile":
 			board.set_tile_state(ev["tile"], ev["owner"], ev["level"])
+			if ev["owner"] >= 0 and ev["level"] < 4:
+				Audio.play("buy" if ev["level"] == 0 else "build", 0.05)
 			if ev["owner"] >= 0 and ev["owner"] == engine.current:
 				tokens[ev["owner"]].cheer()
 			await get_tree().create_timer(0.12 / speed).timeout
 		"festival":
 			board.set_festival(ev["tile"])
 		"card":
+			Audio.play("card", 0.1)
 			var title := "KHÍ VẬN" if ev["deck"] == "khi_van" else "CƠ HỘI"
 			await hud.show_toast("%s — %s\n\n%s" % [title, ev["name"], ev["text"]], 1.9 / speed)
 		"duel":
+			Audio.play("duel")
 			await dice.roll([ev["ra"], ev["rb"]], speed)
 			if ev["ra"] != ev["rb"]:
 				tokens[ev["a"] if ev["ra"] > ev["rb"] else ev["b"]].cheer()
@@ -353,9 +383,12 @@ func _play(ev: Dictionary) -> void:
 			var txt := "Xổ số: chọn %d — ra %d\n%s" % [ev["number"], ev["roll"], "TRÚNG LỚN!" if ev["win"] else "Trượt rồi!"]
 			await hud.show_toast(txt, 1.3 / speed)
 		"landmark":
+			Audio.play("landmark")
+			Audio.play("firework", 0.1, -3.0)
 			season_fx.fireworks()
 			await hud.show_toast("DANH THẮNG\n%s" % BoardData.tile(ev["tile"])["landmark"], 1.3 / speed)
 		"takeover":
+			Audio.play("takeover")
 			await hud.show_toast("THÂU TÓM %s!" % BoardData.plain_name(ev["tile"]).to_upper(), 1.0 / speed)
 		"card_gain":
 			_float_text(ev["p"], "+ " + String(CardsData.SKILLS[ev["card"]]["name"]), Color("#40c4ff"))
@@ -363,10 +396,18 @@ func _play(ev: Dictionary) -> void:
 			_float_text(ev["p"], "+ " + String(BoardData.tile(ev["tile"])["specialty"]), Color("#ffd740"))
 		"bankrupt":
 			tokens[ev["p"]].sad()
+			Audio.play("bankrupt")
 			await hud.show_toast("%s PHÁ SẢN!" % engine.players[ev["p"]]["name"], 1.3 / speed)
 			tokens[ev["p"]].visible = false
 			hud.refresh_players()
+		"toll":
+			Audio.play("toll")
+		"charity":
+			Audio.play("win", 0.0, -6.0)
 		"game_over":
+			Audio.stop_music(0.8)
+			Audio.play("win")
+			tokens[ev["winner"]].cheer()
 			hud.refresh_players()
 			board.update_info(engine)
 			hud.show_game_over(ev)

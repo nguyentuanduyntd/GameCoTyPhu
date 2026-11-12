@@ -288,10 +288,18 @@ Mỗi khi tất cả người chơi đi xong 2 lượt → đổi mùa (Xuân �
 
 ## 8. Âm thanh & Âm nhạc
 
-- **Nhạc nền**: phong cách ngũ cung Việt Nam (sáo trúc, đàn tranh, đàn bầu) pha lo-fi/hiện đại. Mỗi mùa có biến tấu riêng; nhạc sảnh vui, nhạc cuối ván kịch tính hơn.
-- **Hiệu ứng**: xúc xắc lăn, bước đi, tiền "ting ting", xây nhà, thâu tóm, phá sản, pháo Tết, mưa/bão, còi xe khi Kẹt Xe, tiếng tàu hỏa…
-- **Giọng thông báo** (tùy chọn, làm sau): "Kẹt xe rồi!", "Thâu tóm!"…
-- Âm lượng nhạc / hiệu ứng tách riêng trong Cài đặt.
+Toàn bộ được **tổng hợp bằng code** (`tools/gen_audio.py`), không dùng mẫu âm thanh bên ngoài nên không vướng bản quyền.
+
+- **Nhạc cụ mô phỏng**: đàn tranh (dây gảy Karplus-Strong), đàn bầu (sin có luyến cao độ và rung), sáo trúc (sin + tiếng hơi), mõ, trống, cồng chiêng.
+- **Nhạc nền** (lặp liền mạch, chuyển bài mượt):
+  | Bản | Dùng ở | Nhạc cụ chính | Điệu |
+  |---|---|---|---|
+  | music_lobby | Sảnh | Sáo trúc | Bắc (Hò Xự Xang Xê Cống), tươi sáng |
+  | music_game_a | Mùa Xuân, Hạ | Đàn tranh | Bắc |
+  | music_game_b | Mùa Thu, Đông | Đàn bầu | Oán, trầm lắng |
+- **Hiệu ứng (18)**: xúc xắc, bước đi, tiền vào, trả tiền, mua đất, xây nhà, danh thắng (cồng chiêng), rút thẻ, còi xe Kẹt Xe, đụng độ (trống), thâu tóm, phá sản, chiến thắng, bấm nút, qua Trạm BOT, sấm (bão), pháo hoa, tới lượt bạn.
+- Âm lượng nhạc và hiệu ứng chỉnh riêng trong Cài đặt.
+- **Làm sau**: giọng thông báo ("Kẹt xe rồi!", "Thâu tóm!"…).
 
 ---
 
@@ -352,7 +360,7 @@ data/        Bảng giá ô đất, thẻ Cơ Hội, nhân vật, mùa (JSON/Res
 | M0 ✅ | Cài Godot, khởi tạo project, Git, cấu trúc thư mục | Project chạy được |
 | M1 ✅ | Core luật chơi + bot AI + bàn cờ 3D đơn giản | **Chơi với máy được (bản thô)** |
 | M2 ✅ | Bàn cờ 3D: bản đồ Việt Nam giữa bàn (cờ chủ sở hữu theo tỉnh, có Hoàng Sa, Trường Sa), 8 nhân vật chibi theo nghề, 34 danh thắng (11 kiểu dáng), hiệu ứng mùa/bão/cúp điện/pháo hoa Tết, camera tự xoay theo lượt, bấm ô xem thông tin | Ván chơi đẹp mắt |
-| M3 | Menu, sảnh 3D chọn nhân vật, âm thanh, cài đặt | Bản offline hoàn chỉnh |
+| M3 ✅ | Sảnh 3D kiểu đình làng (nhân vật đứng hàng ngang trên bục, đổi nhân vật ◀ ▶, bốc lại đối thủ), 18 hiệu ứng âm thanh + 3 bản nhạc ngũ cung tự tổng hợp, bảng cài đặt lưu trên máy | Bản offline hoàn chỉnh |
 | M4 | Server: tạo phòng bằng mã, ghép trận | Chơi online với bạn bè |
 | M5 | Tài khoản, leo hạng, bảng xếp hạng | Leo hạng |
 | M6 | Tối ưu mobile, xuất bản Windows + Android, cân bằng | Bản phát hành |

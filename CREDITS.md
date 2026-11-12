@@ -8,7 +8,9 @@ Mọi tài nguyên trong game phải là **tự làm** hoặc có giấy phép *
 | Mô hình bàn cờ, nhà, 34 danh thắng, 8 nhân vật, xúc xắc | Tự dựng bằng code (khối cơ bản của Godot) | Của dự án |
 | Bản đồ Việt Nam cách điệu | Tự vẽ từ toạ độ kinh/vĩ độ gần đúng (có Hoàng Sa, Trường Sa, Phú Quốc) | Của dự án |
 | Hiệu ứng mùa (hoa, lá, mưa, pháo hoa) | Hạt CPUParticles3D tự cấu hình | Của dự án |
+| 18 hiệu ứng âm thanh, 3 bản nhạc nền | Tự tổng hợp bằng tools/gen_audio.py (Karplus-Strong, sin, nhiễu) | Của dự án |
+| Sảnh 3D (sân khấu đình làng, đèn lồng, câu đối) | Tự dựng bằng code | Của dự án |
 | Font chữ | Font mặc định của Godot | MIT / OFL |
 | Nội dung thẻ Cơ Hội, nhân vật, luật chơi | Tự viết | Của dự án |
 
-Chưa có âm thanh và mô hình bên ngoài nào (âm thanh sẽ thêm ở giai đoạn M3).
+Hiện game không dùng bất kỳ tài nguyên bên ngoài nào ngoài engine Godot.

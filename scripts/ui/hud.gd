@@ -77,7 +77,7 @@ func _build() -> void:
 
 	# --- Phải: nhật ký + nút tốc độ/menu
 	var right := VBoxContainer.new()
-	_anchor(right, Control.PRESET_TOP_RIGHT, -290, 10, -10, 260)
+	_anchor(right, Control.PRESET_TOP_RIGHT, -360, 10, -10, 260)
 	root.add_child(right)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_END
@@ -89,6 +89,7 @@ func _build() -> void:
 		set_cam_auto(on)
 		cam_toggled.emit(on))
 	row.add_child(cam_btn)
+	row.add_child(_button("Cài đặt", func(): add_child(SettingsPanel.new())))
 	row.add_child(_button("Menu", func(): menu_requested.emit()))
 	var log_panel := PanelContainer.new()
 	log_panel.add_theme_stylebox_override("panel", _style(Color(0, 0, 0, 0.5), 10))
@@ -631,6 +632,7 @@ func _button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = Vector2(0, 40)
+	b.pressed.connect(func(): Audio.play("click"))
 	b.pressed.connect(cb)
 	return b
 
