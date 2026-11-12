@@ -27,6 +27,10 @@ data/buildings/   4 loại công trình (Nhà hàng, Homestay, Chợ, Xưởng �
 scripts/game/     Bàn cờ 3D, bản đồ Việt Nam, nhân vật, danh thắng, xúc xắc, hiệu ứng mùa, camera
                   (game.gd nối engine với hình ảnh)
 scripts/ui/       Sảnh 3D, HUD trong ván, bảng cài đặt
+scripts/ui/theme/ Theme gốc: bảng màu (data/ui/palette.tres), UiTheme, bộ icon vẽ bằng code
+scripts/ui/hud/   Thẻ nhân vật (avatar), thanh Vòng/Mùa/Quỹ, nhật ký
+scripts/ui/popup/ UiPopup (popup quyết định dùng chung), NotifyQueue (hàng đợi thông báo)
+scripts/game/pawn_motion.gd  Chuyển động quân cờ (nhảy parabol, squash/stretch, xếp chỗ)
 scripts/audio.gd  Quản lý âm thanh (autoload "Audio")
 assets/audio/     Âm thanh và nhạc nền (.wav) — do tools/gen_audio.py tổng hợp
 tools/            Script tạo âm thanh (Python + numpy)
@@ -109,6 +113,25 @@ Trưng bày toàn bộ 34 danh thắng (ván không chạy), đặt camera gần
 ```bash
 godot --path . -- --showcase --camdist=8 --camlook=8.3 --camyaw=0 --shot=screenshots
 ```
+
+Xem chuyển động quân cờ (4 quân chung ô, một quân nhảy đi rồi về, rồi các phản ứng):
+
+```bash
+godot --path . -- --motiondemo --speed=1 --shots=12 --every=0.45 --shot=screenshots
+```
+
+Ván ngắn để xem màn kết thúc: thêm `--rounds=1`. Cho popup quyết định hiện lâu hơn khi autotest: `--clickdelay=4`.
+
+### Phím kiểm thử (chỉ bản debug, khi đang trong ván)
+
+| Phím | Tác dụng |
+|---|---|
+| F1 | Popup mẫu, lần lượt loại thường / xui / may (Enter = nút chính, Esc = nút phụ) |
+| F2 | Loạt thông báo (có thông báo trùng để thử gộp) |
+| F3 | Quân đang tới lượt nhảy thử 6 ô rồi nhảy về (chỉ hình ảnh) |
+| F4 | Thử vào Kẹt Xe (chỉ hình ảnh) |
+| F5 | Lần lượt các phản ứng: lucky, jolt, cheer, slump, sigh, sad |
+| F6 | Đổi kích thước cửa sổ 1280×720 ↔ 1920×1080 |
 
 ## Tiến độ
 
