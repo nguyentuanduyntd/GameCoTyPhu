@@ -23,12 +23,19 @@ var cam_dist := 27.0
 var _drag_start := Vector2.ZERO
 var _dragging := false
 var _autotest := false
+var season_fx: SeasonFx
+var sun: DirectionalLight3D
+var env: Environment
+var sky_mat: ProceduralSkyMaterial
+var cam_auto := true
+var _cam_tween: Tween
+var _cam_look_z := 1.4
 var _shot_dir := ""
 
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	_autotest = args.has("--autotest") or args.has("--autotest-human")
+	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase")
 	for a in args:
 		if a.begins_with("--shot="):
 			_shot_dir = a.substr(7)
@@ -40,12 +47,15 @@ func _ready() -> void:
 	board.build(PLAYER_COLORS)
 	dice = DiceView.new()
 	add_child(dice)
+	season_fx = SeasonFx.new()
+	add_child(season_fx)
+	season_fx.setup(sun, env, sky_mat, BoardView.H)
 	_setup_camera()
 
 	engine = GameEngine.new()
-	var cfg := Global.make_player_configs(args.has("--autotest"))
+	var cfg := Global.make_player_configs(args.has("--autotest") or args.has("--showcase"))
 	for i in cfg.size():
-		var tok := _make_token(Color(PLAYER_COLORS[i]), cfg[i]["character"])
+		var tok := Character3D.new().setup(cfg[i]["character"], Color(PLAYER_COLORS[i]))
 		add_child(tok)
 		tokens.append(tok)
 		token_tile.append(0)
@@ -60,20 +70,40 @@ func _ready() -> void:
 	hud.menu_requested.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	hud.restart_requested.connect(func(): get_tree().reload_current_scene())
 	hud.speed_changed.connect(_on_speed_changed)
+	hud.cam_toggled.connect(_on_cam_toggled)
 	_relayout(true)
 	hud.refresh_players()
+	# Chế độ kiểm thử hình ảnh: dựng sẵn mọi danh thắng, đặt camera theo tham số
+	for a in args:
+		if a.begins_with("--camdist="):
+			cam_dist = float(a.substr(10))
+			_update_camera()
+		if a.begins_with("--camlook="):
+			_cam_look_z = float(a.substr(10))
+			_update_camera()
+		if a.begins_with("--camyaw="):
+			cam_auto = false
+			cam_yaw = deg_to_rad(float(a.substr(9)))
+			_update_camera()
+	if args.has("--showcase"):
+		for t in BoardData.TILE_COUNT:
+			if BoardData.is_province(t):
+				board.set_tile_state(t, t % cfg.size(), 4)
 	if _autotest:
 		_start_autotest()
+	if args.has("--showcase"):
+		return
 	_feed(events)
 
 
 # ---------------------------------------------------------------- môi trường & camera
 
 func _setup_environment() -> void:
-	var env := Environment.new()
+	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sm := ProceduralSkyMaterial.new()
+	sky_mat = sm
 	sm.sky_top_color = Color("#4f8fd6")
 	sm.sky_horizon_color = Color("#cde6f5")
 	sm.ground_horizon_color = Color("#cde6f5")
@@ -86,7 +116,7 @@ func _setup_environment() -> void:
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
-	var sun := DirectionalLight3D.new()
+	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-58, -35, 0)
 	sun.light_energy = 1.15
 	sun.shadow_enabled = true
@@ -105,8 +135,8 @@ func _setup_camera() -> void:
 
 func _update_camera() -> void:
 	cam_pivot.rotation.y = cam_yaw
-	camera.position = Vector3(0, cam_dist * 0.88, cam_dist * 0.47)
-	camera.transform = Transform3D(Basis.looking_at(Vector3(0, 0, 1.4) - camera.position, Vector3.UP), camera.position)
+	camera.position = Vector3(0, cam_dist * 0.88, cam_dist * 0.47 + (_cam_look_z - 1.4))
+	camera.transform = Transform3D(Basis.looking_at(Vector3(0, 0, _cam_look_z) - camera.position, Vector3.UP), camera.position)
 
 
 func _unhandled_input(ev: InputEvent) -> void:
@@ -130,6 +160,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 			if mm.position.distance_to(_drag_start) > 10:
 				_dragging = true
 			if _dragging:
+				if cam_auto:
+					_on_cam_toggled(false)
+					hud.set_cam_auto(false)
 				cam_yaw -= mm.relative.x * 0.006
 				_update_camera()
 	elif ev is InputEventMagnifyGesture:
@@ -138,16 +171,40 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 
 func _try_pick(screen: Vector2) -> void:
-	if _picking.is_empty():
-		return
 	var from := camera.project_ray_origin(screen)
 	var dir := camera.project_ray_normal(screen)
 	if absf(dir.y) < 0.001:
 		return
 	var hit := from + dir * ((BoardView.TILE_Y - from.y) / dir.y)
 	var t := board.tile_at(hit)
-	if _picking.has(t):
+	if _picking.is_empty():
+		if t >= 0:
+			hud.show_tile_info(t)
+		else:
+			hud.hide_tile_info()
+	elif _picking.has(t):
 		hud.pick_tile(t)
+
+
+## Camera tự động xoay về cạnh bàn cờ có ô t, để chữ trên ô luôn đọc xuôi chiều.
+func _focus_tile(t: int) -> void:
+	if not cam_auto:
+		return
+	var side: int = t / BoardData.SIDE
+	var target: float = [0.0, -PI / 2, PI, PI / 2][side]
+	var diff := wrapf(target - cam_yaw, -PI, PI)
+	if absf(diff) < 0.01:
+		return
+	if _cam_tween and _cam_tween.is_valid():
+		_cam_tween.kill()
+	_cam_tween = create_tween()
+	_cam_tween.tween_method(func(v: float): cam_yaw = v; _update_camera(), cam_yaw, cam_yaw + diff, 0.6 / speed).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+func _on_cam_toggled(on: bool) -> void:
+	cam_auto = on
+	if on and engine and not engine.pending.is_empty():
+		_focus_tile(token_tile[engine.pending["p"]])
 
 
 func _on_pick_mode(tiles: Array) -> void:
@@ -156,51 +213,6 @@ func _on_pick_mode(tiles: Array) -> void:
 
 
 # ---------------------------------------------------------------- quân cờ
-
-func _make_token(col: Color, character: String) -> Node3D:
-	var root := Node3D.new()
-	var body := MeshInstance3D.new()
-	var cm := CapsuleMesh.new()
-	cm.radius = 0.16
-	cm.height = 0.55
-	body.mesh = cm
-	body.position.y = 0.28
-	body.material_override = _mat(col)
-	root.add_child(body)
-	var head := MeshInstance3D.new()
-	var hm := SphereMesh.new()
-	hm.radius = 0.13
-	hm.height = 0.26
-	head.mesh = hm
-	head.position.y = 0.66
-	head.material_override = _mat(Color("#ffcc99"))
-	root.add_child(head)
-	# Nón lá cho mọi nhân vật — mũ bảo hiểm cho anh xe ôm
-	var hat := MeshInstance3D.new()
-	var hat_mesh := CylinderMesh.new()
-	if character == "xe_om":
-		hat_mesh.top_radius = 0.1
-		hat_mesh.bottom_radius = 0.15
-		hat_mesh.height = 0.1
-		hat.material_override = _mat(Color("#212121"))
-		hat.position.y = 0.76
-	else:
-		hat_mesh.top_radius = 0.0
-		hat_mesh.bottom_radius = 0.24
-		hat_mesh.height = 0.13
-		hat.material_override = _mat(Color("#e8d39a"))
-		hat.position.y = 0.8
-	hat.mesh = hat_mesh
-	root.add_child(hat)
-	return root
-
-
-func _mat(col: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = col
-	m.roughness = 0.6
-	return m
-
 
 func _relayout(instant: bool = false) -> void:
 	var groups := {}
@@ -287,10 +299,13 @@ func _play(ev: Dictionary) -> void:
 		"turn":
 			hud.set_current(ev["p"])
 			hud.refresh_players()
+			_focus_tile(token_tile[ev["p"]])
 		"round":
 			hud.set_round(ev["n"])
+			season_fx.set_blackout(false)
 		"season":
 			board.set_season(ev["season"], ev["event"])
+			season_fx.set_season(ev["season"], ev["event"])
 			hud.set_season(ev["season"], ev["event"])
 		"cash":
 			hud.set_cash(ev["p"], ev["cash"])
@@ -300,12 +315,15 @@ func _play(ev: Dictionary) -> void:
 			await dice.roll(ev["d"], speed)
 		"move":
 			await _move_token(ev["p"], ev["path"], ev["fast"])
+			_focus_tile(token_tile[ev["p"]])
 		"jail":
 			token_tile[ev["p"]] = BoardData.JAIL_TILE
 			await _relayout()
 			await hud.show_toast("%s bị KẸT XE!" % engine.players[ev["p"]]["name"], 0.9 / speed)
 		"tile":
 			board.set_tile_state(ev["tile"], ev["owner"], ev["level"])
+			if ev["owner"] >= 0 and ev["owner"] == engine.current:
+				tokens[ev["owner"]].cheer()
 			await get_tree().create_timer(0.12 / speed).timeout
 		"festival":
 			board.set_festival(ev["tile"])
@@ -314,6 +332,9 @@ func _play(ev: Dictionary) -> void:
 			await hud.show_toast("%s — %s\n\n%s" % [title, ev["name"], ev["text"]], 1.9 / speed)
 		"duel":
 			await dice.roll([ev["ra"], ev["rb"]], speed)
+			if ev["ra"] != ev["rb"]:
+				tokens[ev["a"] if ev["ra"] > ev["rb"] else ev["b"]].cheer()
+				tokens[ev["b"] if ev["ra"] > ev["rb"] else ev["a"]].sad()
 			await hud.show_toast("ĐỤNG ĐỘ\n%s  %d – %d  %s" % [engine.players[ev["a"]]["name"], ev["ra"], ev["rb"], engine.players[ev["b"]]["name"]], 1.2 / speed)
 		"swap":
 			var ta: int = token_tile[ev["a"]]
@@ -326,11 +347,13 @@ func _play(ev: Dictionary) -> void:
 		"charity":
 			await hud.show_toast("%s nhận Quỹ Từ Thiện\n%s xu!" % [engine.players[ev["p"]]["name"], BoardData.money(ev["amount"])], 1.3 / speed)
 		"blackout":
+			season_fx.set_blackout(true)
 			await hud.show_toast("CÚP ĐIỆN DIỆN RỘNG\nTiền thuê toàn bàn −50% đến hết vòng", 1.3 / speed)
 		"lottery":
 			var txt := "Xổ số: chọn %d — ra %d\n%s" % [ev["number"], ev["roll"], "TRÚNG LỚN!" if ev["win"] else "Trượt rồi!"]
 			await hud.show_toast(txt, 1.3 / speed)
 		"landmark":
+			season_fx.fireworks()
 			await hud.show_toast("DANH THẮNG\n%s" % BoardData.tile(ev["tile"])["landmark"], 1.3 / speed)
 		"takeover":
 			await hud.show_toast("THÂU TÓM %s!" % BoardData.plain_name(ev["tile"]).to_upper(), 1.0 / speed)
@@ -339,6 +362,7 @@ func _play(ev: Dictionary) -> void:
 		"specialty":
 			_float_text(ev["p"], "+ " + String(BoardData.tile(ev["tile"])["specialty"]), Color("#ffd740"))
 		"bankrupt":
+			tokens[ev["p"]].sad()
 			await hud.show_toast("%s PHÁ SẢN!" % engine.players[ev["p"]]["name"], 1.3 / speed)
 			tokens[ev["p"]].visible = false
 			hud.refresh_players()

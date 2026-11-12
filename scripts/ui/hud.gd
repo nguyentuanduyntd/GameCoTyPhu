@@ -7,6 +7,7 @@ signal pick_mode(tiles: Array)
 signal menu_requested
 signal restart_requested
 signal speed_changed(speed: float)
+signal cam_toggled(auto: bool)
 
 var engine: GameEngine
 var colors: Array = []
@@ -27,6 +28,9 @@ var toast_label: Label
 var waiting_label: Label
 var over_panel: PanelContainer
 var speed_btn: Button
+var cam_btn: Button
+var info_panel: PanelContainer
+var info_label: RichTextLabel
 
 var _pick_callback: Callable = Callable()
 var _lottery_number: int = 1
@@ -80,6 +84,11 @@ func _build() -> void:
 	right.add_child(row)
 	speed_btn = _button("Tốc độ x1", _on_speed)
 	row.add_child(speed_btn)
+	cam_btn = _button("Camera: Tự động", func():
+		var on := cam_btn.text.ends_with("Tự do")
+		set_cam_auto(on)
+		cam_toggled.emit(on))
+	row.add_child(cam_btn)
 	row.add_child(_button("Menu", func(): menu_requested.emit()))
 	var log_panel := PanelContainer.new()
 	log_panel.add_theme_stylebox_override("panel", _style(Color(0, 0, 0, 0.5), 10))
@@ -149,6 +158,24 @@ func _build() -> void:
 	toast_label.add_theme_color_override("font_color", Color("#3e2723"))
 	toast_panel.add_child(toast_label)
 	toast_panel.visible = false
+
+	# --- Bảng thông tin ô (bấm vào ô trên bàn cờ)
+	info_panel = PanelContainer.new()
+	info_panel.add_theme_stylebox_override("panel", _style(Color("#fff8e1", 0.97), 12, Color("#5d4037")))
+	_anchor(info_panel, Control.PRESET_CENTER_RIGHT, -300, -150, -10, 150)
+	root.add_child(info_panel)
+	var iv := VBoxContainer.new()
+	info_panel.add_child(iv)
+	info_label = RichTextLabel.new()
+	info_label.bbcode_enabled = true
+	info_label.fit_content = true
+	info_label.custom_minimum_size = Vector2(270, 0)
+	info_label.add_theme_color_override("default_color", Color("#3e2723"))
+	info_label.add_theme_font_size_override("normal_font_size", 14)
+	info_label.add_theme_font_size_override("bold_font_size", 18)
+	iv.add_child(info_label)
+	iv.add_child(_button("Đóng", hide_tile_info))
+	info_panel.visible = false
 
 
 # ---------------------------------------------------------------- bảng người chơi
@@ -537,6 +564,62 @@ func _on_speed() -> void:
 	_speed_idx = (_speed_idx + 1) % _speeds.size()
 	speed_btn.text = "Tốc độ x%d" % int(_speeds[_speed_idx])
 	speed_changed.emit(_speeds[_speed_idx])
+
+
+func set_cam_auto(on: bool) -> void:
+	cam_btn.text = "Camera: Tự động" if on else "Camera: Tự do"
+
+
+func hide_tile_info() -> void:
+	info_panel.visible = false
+
+
+func show_tile_info(t: int) -> void:
+	var td := BoardData.tile(t)
+	var ty: int = td["type"]
+	var lines: Array = ["[b]%s[/b]" % BoardData.plain_name(t)]
+	if ty == BoardData.T.PROVINCE:
+		var g: Dictionary = BoardData.GROUPS[td["group"]]
+		lines.append("Vùng %s · %s%s" % [g["name"], BoardData.REGION_NAMES[g["region"]], " · ven biển" if td.get("coastal", false) else ""])
+		lines.append("Giá đất: %s xu" % BoardData.money(td["price"]))
+		var o: int = engine.owner[t]
+		if o >= 0:
+			lines.append("Chủ: [color=%s]%s[/color] · %s" % [colors[o], engine.players[o]["name"], GameEngine.LEVEL_NAMES[engine.level[t]]])
+			lines.append("Tiền thuê hiện tại: [b]%s xu[/b]" % BoardData.money(engine.rent(t)))
+		else:
+			lines.append("Chưa có chủ")
+		var rents: Array = []
+		for l in 5:
+			rents.append(BoardData.money(_round5(td["price"] * GameEngine.RENT_MULT[l])))
+		lines.append("Thuê cơ bản theo cấp: " + " / ".join(rents))
+		lines.append("Đặc sản: %s" % td["specialty"])
+		lines.append("Danh thắng: %s" % td["landmark"])
+		if t == engine.festival_tile:
+			lines.append("[color=#c62828]Đang có Lễ Hội![/color]")
+	elif ty == BoardData.T.INFRA or ty == BoardData.T.TOLL:
+		lines.append("Giá: %s xu" % BoardData.money(td["price"]))
+		var o: int = engine.owner[t]
+		lines.append(("Chủ: %s · thuê %s xu" % [engine.players[o]["name"], BoardData.money(engine.rent(t))]) if o >= 0 else "Chưa có chủ")
+		if ty == BoardData.T.TOLL:
+			lines.append("Ai đi ngang qua mất %d xu; dừng đúng trạm trả %d xu." % [GameEngine.TOLL_FEE, GameEngine.TOLL_FEE * GameEngine.TOLL_LAND_MULT])
+		else:
+			lines.append("Thuê theo số hạ tầng sở hữu: 50 / 100 / 200 / 400.")
+	else:
+		var desc := {
+			BoardData.T.START: "Đi qua nhận lương 200 xu, dừng đúng ô thưởng thêm 200.",
+			BoardData.T.JAIL: "Kẹt Xe: tung đôi, gọi xe ôm hoặc đi đường tắt để thoát. Trượt 2 lần thì CSGT phân luồng.",
+			BoardData.T.FESTIVAL: "Chọn 1 tỉnh của bạn tổ chức Lễ Hội: tiền thuê ×2.",
+			BoardData.T.TRAIN: "Lượt sau trả vé để đi thẳng tới bất kỳ ô nào.",
+			BoardData.T.KHI_VAN: "Rút thẻ Khí Vận: may rủi, có hiệu lực ngay.",
+			BoardData.T.CO_HOI: "Rút thẻ Cơ Hội: cơ hội làm ăn, bạn được quyết định.",
+			BoardData.T.TAX: "Nộp 10% tổng tài sản (tối đa 200) vào Quỹ Từ Thiện.",
+			BoardData.T.MARKET: "Đổi đặc sản lấy Thẻ Kỹ Năng hoặc mua đặc sản.",
+			BoardData.T.LOTTERY: "Chọn số 1–6 và đặt cược, trúng nhận ×5.",
+			BoardData.T.CHARITY: "Dừng ở đây nhận toàn bộ quỹ: [b]%s xu[/b]." % BoardData.money(engine.charity_pot),
+		}
+		lines.append(String(desc.get(ty, "")))
+	info_label.text = "\n".join(lines)
+	info_panel.visible = true
 
 
 func set_speed_display(speed: float) -> void:

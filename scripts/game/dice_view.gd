@@ -3,7 +3,7 @@ extends Node3D
 ## Hai viên xúc xắc 3D (chấm 1 và 4 màu đỏ như xúc xắc truyền thống).
 
 const SIZE := 0.6
-const REST := Vector3(0, 0, 2.6)
+const REST := Vector3(-4.6, 0.1, 2.4)
 
 # Mặt -> pháp tuyến cục bộ. Mặt đối diện cộng lại bằng 7.
 const FACE_NORMALS := {1: Vector3.UP, 6: Vector3.DOWN, 2: Vector3.RIGHT, 5: Vector3.LEFT, 3: Vector3.BACK, 4: Vector3.FORWARD}

@@ -12,7 +12,7 @@ const ROUND_CHOICES := [15, 20, 25, 30]
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	if args.has("--autotest") or args.has("--autotest-human"):
+	if args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase"):
 		Global.bot_count = 5
 		Global.max_rounds = 15
 		get_tree().change_scene_to_file.call_deferred("res://scenes/game.tscn")

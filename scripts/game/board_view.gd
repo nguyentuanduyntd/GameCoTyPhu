@@ -19,6 +19,7 @@ var info_labels: Array = []
 var highlight_nodes: Array = []
 var festival_marker: Node3D
 var center_ground: MeshInstance3D
+var map: VietnamMap
 var season_label: Label3D
 var season_event_label: Label3D
 var pot_label: Label3D
@@ -109,7 +110,7 @@ func _build_base() -> void:
 	center_ground.mesh = cm
 	center_ground.position.y = 0.04
 	var gm := StandardMaterial3D.new()
-	gm.albedo_color = Color(SEASON_GROUND[0])
+	gm.albedo_color = Color("#4fa3d9")
 	gm.roughness = 0.95
 	center_ground.material_override = gm
 	add_child(center_ground)
@@ -282,34 +283,28 @@ func _decorate_corner(i: int, root: Node3D) -> void:
 
 
 func _build_center() -> void:
-	var title := _flat_label("TỶ PHÚ ĐẤT VIỆT", 110, 12.0, 0.011)
-	title.position = Vector3(0, 0.12, -3.0)
+	map = VietnamMap.new()
+	add_child(map)
+	map.build(player_colors)
+	var title := _flat_label("TỶ PHÚ
+ĐẤT VIỆT", 110, 5.5, 0.009)
+	title.position = Vector3(4.4, 0.12, -5.0)
 	title.modulate = Color("#b71c1c")
 	title.outline_size = 18
 	title.outline_modulate = Color("#fff8e1")
 	add_child(title)
-	season_label = _flat_label("", 64, 12.0, 0.01)
-	season_label.position = Vector3(0, 0.12, -1.6)
-	season_label.modulate = Color("#1b5e20")
-	season_label.outline_size = 12
-	season_label.outline_modulate = Color("#ffffff")
+	season_label = _flat_label("", 64, 5.5, 0.008)
+	season_label.position = Vector3(4.4, 0.12, -3.4)
+	season_label.modulate = Color("#ffffff")
+	season_label.outline_size = 14
+	season_label.outline_modulate = Color("#1b5e20")
 	add_child(season_label)
-	season_event_label = _flat_label("", 48, 12.0, 0.009)
-	season_event_label.position = Vector3(0, 0.12, -0.7)
-	season_event_label.modulate = Color("#bf360c")
-	season_event_label.outline_size = 10
-	season_event_label.outline_modulate = Color("#ffffff")
+	season_event_label = _flat_label("", 48, 5.5, 0.008)
+	season_event_label.position = Vector3(4.4, 0.12, -2.6)
+	season_event_label.modulate = Color("#fff59d")
+	season_event_label.outline_size = 12
+	season_event_label.outline_modulate = Color("#bf360c")
 	add_child(season_event_label)
-	# Cây trang trí
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	for k in 26:
-		var a := rng.randf() * TAU
-		var r := rng.randf_range(4.2, 5.4)
-		var p := Vector3(cos(a) * r, 0.08, sin(a) * r)
-		if absf(p.z) < 1.2 and absf(p.x) < 5.5:
-			continue
-		add_child(_tree(p, rng.randf_range(0.7, 1.2)))
 
 
 func _tree(p: Vector3, s: float) -> Node3D:
@@ -341,6 +336,8 @@ func _tree(p: Vector3, s: float) -> Node3D:
 # ---------------------------------------------------------------- cập nhật trạng thái
 
 func set_tile_state(t: int, owner_id: int, lvl: int) -> void:
+	if BoardData.is_province(t):
+		map.set_province_owner(t, owner_id, lvl)
 	var strip: MeshInstance3D = owner_strips[t]
 	strip.visible = owner_id >= 0
 	if owner_id >= 0:
@@ -366,7 +363,7 @@ func set_tile_state(t: int, owner_id: int, lvl: int) -> void:
 			roof.position.y = 0.63
 			broot.add_child(roof)
 		4:
-			broot.add_child(_landmark(col))
+			broot.add_child(LandmarkBuilder.build(String(BoardData.tile(t)["landmark"]), Color(col)))
 	var tw := create_tween()
 	broot.scale = Vector3(1, 0.05, 1)
 	tw.tween_property(broot, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -399,9 +396,7 @@ func set_festival(t: int) -> void:
 func set_season(s: int, ev: Dictionary) -> void:
 	season_label.text = "Mùa " + GameEngine.SEASON_NAMES[s]
 	season_event_label.text = String(ev.get("name", ""))
-	var tw := create_tween()
-	var mat: StandardMaterial3D = center_ground.material_override
-	tw.tween_property(mat, "albedo_color", Color(SEASON_GROUND[s]), 1.0)
+	map.set_season(s)
 
 
 func highlight(tiles: Array) -> void:

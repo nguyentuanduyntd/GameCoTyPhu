@@ -349,9 +349,9 @@ data/        Bảng giá ô đất, thẻ Cơ Hội, nhân vật, mùa (JSON/Res
 
 | Giai đoạn | Nội dung | Kết quả chơi được |
 |---|---|---|
-| M0 | Cài Godot, khởi tạo project, Git, cấu trúc thư mục | Project chạy được |
-| M1 | Core luật chơi + bot AI + bàn cờ 3D đơn giản | **Chơi với máy được (bản thô)** |
-| M2 | Bàn cờ 3D hoàn chỉnh: xúc xắc 3D, quân cờ, nhà/danh thắng, camera, mùa | Ván chơi đẹp mắt |
+| M0 ✅ | Cài Godot, khởi tạo project, Git, cấu trúc thư mục | Project chạy được |
+| M1 ✅ | Core luật chơi + bot AI + bàn cờ 3D đơn giản | **Chơi với máy được (bản thô)** |
+| M2 ✅ | Bàn cờ 3D: bản đồ Việt Nam giữa bàn (cờ chủ sở hữu theo tỉnh, có Hoàng Sa, Trường Sa), 8 nhân vật chibi theo nghề, 34 danh thắng (11 kiểu dáng), hiệu ứng mùa/bão/cúp điện/pháo hoa Tết, camera tự xoay theo lượt, bấm ô xem thông tin | Ván chơi đẹp mắt |
 | M3 | Menu, sảnh 3D chọn nhân vật, âm thanh, cài đặt | Bản offline hoàn chỉnh |
 | M4 | Server: tạo phòng bằng mã, ghép trận | Chơi online với bạn bè |
 | M5 | Tài khoản, leo hạng, bảng xếp hạng | Leo hạng |
