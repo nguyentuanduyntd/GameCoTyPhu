@@ -39,6 +39,8 @@ var _blend := 1.0
 var _blend_time := 0.8
 var _damp := 5.0
 var _shake := 0.0
+## Độ cao bám theo quân cờ đã làm mượt (để cú nhảy không làm camera nảy theo).
+var _fy := 0.0
 var _shake_t := 0.0
 var _yaw_target := 0.0
 var _fov_target := OVERVIEW_FOV
@@ -66,6 +68,8 @@ func _process(delta: float) -> void:
 		return
 	# Xoay toàn cảnh mượt về cạnh mục tiêu
 	yaw = lerp_angle(yaw, _yaw_target, 1.0 - exp(-4.0 * delta))
+	if target and is_instance_valid(target):
+		_fy = lerpf(_fy, target.global_position.y, 1.0 - exp(-2.5 * delta))
 	var d := _desired()
 	var want_pos: Vector3 = d[0]
 	var want_look: Vector3 = d[1]
@@ -115,6 +119,7 @@ func overview(duration: float = 1.1) -> void:
 ## Bắt đầu bám quân cờ: chuyển cảnh điện ảnh từ toàn cảnh xuống POV.
 func follow(token: Node3D, tile: int, duration: float = 0.9) -> void:
 	target = token
+	_fy = token.global_position.y
 	_fwd = _path_dir(tile)
 	_switch(Mode.FOLLOW, duration, FOLLOW_FOV, 6.0)
 
@@ -123,8 +128,6 @@ func follow(token: Node3D, tile: int, duration: float = 0.9) -> void:
 func step_to(tile: int) -> void:
 	if mode != Mode.FOLLOW:
 		return
-	_shake = maxf(_shake, 0.035)
-	_shake_t = 0.0
 	var d := _path_dir(tile)
 	_fwd = _fwd.slerp(d, 0.55).normalized() if _fwd.dot(d) > -0.9 else d
 
@@ -189,6 +192,7 @@ func _desired() -> Array:
 		Mode.FOLLOW:
 			if target and is_instance_valid(target):
 				var p := target.global_position
+				p.y = _fy
 				var side := _fwd.cross(Vector3.UP).normalized()
 				# lùi sau quân cờ, cao vừa phải, lệch nhẹ ra mép ngoài để không che các ô phía trước
 				var cam := p - _fwd * follow_back + Vector3.UP * follow_height - side * 0.35

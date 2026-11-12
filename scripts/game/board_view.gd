@@ -91,17 +91,20 @@ func tile_center(i: int) -> Vector3:
 
 
 ## Vị trí đứng của quân thứ `slot` trong `count` quân cùng ô.
+## Nhiều quân cùng ô thì xếp đều trên một vòng elip vừa khít ô (2 quân: trước–sau theo chiều dài ô).
 func slot_position(i: int, slot: int, count: int) -> Vector3:
 	var local := Vector3.ZERO
+	var corner := is_corner(i)
+	var cz := 0.0 if corner else 0.15
 	if count > 1:
-		var cols := 3
-		var col := slot % cols
-		var row := slot / cols
-		var spread := 0.6 if is_corner(i) else 0.34
-		local.x = (col - 1) * spread
-		local.z = 0.05 + row * 0.45 if not is_corner(i) else -0.3 + row * 0.6
+		var sz: Vector2 = tile_sizes[i]
+		var rx := minf(sz.x * 0.5 - 0.27, 0.6)
+		var rz := minf(sz.y * 0.5 - 0.32, 0.6)
+		var a := TAU * float(slot) / float(count) + (PI * 0.5 if count == 2 else -PI * 0.5)
+		local.x = cos(a) * rx
+		local.z = sin(a) * rz + cz
 	else:
-		local.z = 0.15 if not is_corner(i) else 0.0
+		local.z = cz
 	return tile_xforms[i] * local + Vector3(0, TILE_Y, 0)
 
 

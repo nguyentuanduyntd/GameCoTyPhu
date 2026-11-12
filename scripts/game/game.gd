@@ -9,6 +9,9 @@ var board: BoardView
 var dice: DiceView
 var hud: Hud
 var tokens: Array = []
+var _slot_tws := {}          # pid -> Tween xếp chỗ đang chạy (huỷ trước khi tạo mới, không chồng)
+var _moving_pid := -1        # quân đang nhảy trên đường đi (không chiếm chỗ ở các ô đi ngang)
+var motion: PawnMotion
 var token_tile: Array = []
 var human_id := 0
 var speed := 1.0
@@ -47,7 +50,7 @@ var _shot_dir := ""
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo") or args.has("--pickerdemo") or args.has("--juicedemo")
+	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo") or args.has("--pickerdemo") or args.has("--juicedemo") or args.has("--motiondemo")
 	for a in args:
 		if a.begins_with("--carddemo="):
 			_autotest = true
@@ -72,10 +75,13 @@ func _ready() -> void:
 	board.building_landed.connect(_on_building_landed)
 
 	engine = GameEngine.new()
+	motion = PawnMotion.new()
+	add_child(motion)
 	var cfg := Global.make_player_configs(args.has("--autotest") or args.has("--showcase") or args.has("--typeshow") or args.has("--builddemo") or args.has("--juicedemo"))
 	for i in cfg.size():
 		var tok := Character3D.new().setup(cfg[i]["character"], Color(PLAYER_COLORS[i]))
 		add_child(tok)
+		tok.anim_speed = speed
 		tokens.append(tok)
 		token_tile.append(0)
 
@@ -151,6 +157,9 @@ func _ready() -> void:
 		return
 	if args.has("--juicedemo"):
 		_juice_demo()
+		return
+	if args.has("--motiondemo"):
+		_motion_demo()
 		return
 	for a in args:
 		if a.begins_with("--carddemo="):
@@ -292,53 +301,79 @@ func _on_pick_mode(tiles: Array) -> void:
 
 # ---------------------------------------------------------------- quân cờ
 
-func _relayout(instant: bool = false) -> void:
-	var groups := {}
+## Các quân (còn hiện) đang đứng ở ô `tile`, sắp theo id; `include` luôn được tính (quân sắp tới ô).
+func _ids_on(tile: int, include: int = -1) -> Array:
+	var ids: Array = []
+	for q in tokens.size():
+		if q == include or (tokens[q].visible and token_tile[q] == tile and q != _moving_pid):
+			ids.append(q)
+	return ids
+
+
+## Đưa mọi quân về đúng chỗ đứng trong ô của mình (nhảy ngắn; đi xa thì cung nhảy cao hơn).
+## `skip`: quân không bị đụng tới (vẫn được tính chỗ). Mỗi quân chỉ có một tween xếp chỗ tại một thời điểm.
+func _relayout(instant: bool = false, skip: int = -1) -> void:
+	var longest: Tween = null
+	var longest_d := -1.0
 	for pid in tokens.size():
-		if not tokens[pid].visible:
+		if pid == skip or pid == _moving_pid or not tokens[pid].visible:
 			continue
 		var t: int = token_tile[pid]
-		if not groups.has(t):
-			groups[t] = []
-		groups[t].append(pid)
-	var tw: Tween = null
-	for t in groups.keys():
-		var ids: Array = groups[t]
-		for i in ids.size():
-			var target := board.slot_position(t, i, ids.size())
-			var tok: Node3D = tokens[ids[i]]
-			if instant:
-				tok.position = target
-			else:
-				if tw == null:
-					tw = create_tween().set_parallel(true)
-				tw.tween_property(tok, "position", target, 0.15 / speed)
-	if tw != null:
-		await tw.finished
+		var ids := _ids_on(t, pid)
+		var target := board.slot_position(t, ids.find(pid), ids.size())
+		var tok: Character3D = tokens[pid]
+		if instant:
+			var old: Tween = _slot_tws.get(pid)
+			if old and old.is_valid():
+				old.kill()
+			tok.position = target
+			tok.ground_y = target.y
+			continue
+		var d := tok.position.distance_to(target)
+		if d < 0.01:
+			continue
+		var tw := PawnMotion.shuffle_to(tok, target, 0.2 / speed, _slot_tws.get(pid))
+		_slot_tws[pid] = tw
+		if d > longest_d:
+			longest_d = d
+			longest = tw
+	# chờ bằng vòng lặp (tween có thể bị huỷ bởi lần xếp chỗ sau → không treo)
+	while longest and longest.is_valid() and longest.is_running():
+		await get_tree().process_frame
 
 
 func _move_token(pid: int, path: Array, fast: bool, follow: bool = false) -> void:
+	if path.is_empty():
+		return
 	var tok: Character3D = tokens[pid]
-	var step := (0.07 if (fast or path.size() > 12) else (0.27 if follow else 0.2)) / _pspeed(pid)
-	tok.set_walking(true)
+	var quick := fast or path.size() > 12
+	var step := (0.09 if quick else (0.3 if follow else 0.24)) / _pspeed(pid)
+	var old: Tween = _slot_tws.get(pid)
+	if old and old.is_valid():
+		old.kill()
+	var dest: int = path[path.size() - 1]
+	var points: Array = []
 	for t in path:
-		var target := board.tile_center(t)
-		var mid := (tok.position + target) / 2.0 + Vector3(0, 0.35, 0)
-		var dir := target - tok.position
-		dir.y = 0
-		if dir.length() > 0.01:
-			tok.rotation.y = atan2(dir.x, dir.z)
-		var tw := create_tween()
-		tw.tween_property(tok, "position", mid, step * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tw.tween_property(tok, "position", target, step * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		await tw.finished
+		points.append(board.tile_center(t))
+	# đáp thẳng vào chỗ đứng cuối cùng trong ô đích (không trượt sau khi đáp)
+	_moving_pid = pid
+	var ids := _ids_on(dest, pid)
+	points[points.size() - 1] = board.slot_position(dest, ids.find(pid), ids.size())
+	tok.anim_speed = _pspeed(pid)
+	var st := {"left": false}
+	await motion.hop_path(tok, points, step, func(i: int):
+		var t: int = path[i]
+		token_tile[pid] = t
 		if follow:
 			cam_ctl.step_to(t)
-		if not fast or path.size() <= 12:
+		if not quick or i == path.size() - 1:
 			Audio.play("step", 0.15, -6.0)
-		token_tile[pid] = t
-	tok.set_walking(false)
-	await _relayout()
+		if not st["left"]:
+			st["left"] = true
+			_relayout(false, pid)   # các quân còn lại ở ô xuất phát dàn lại chỗ
+	, quick)
+	_moving_pid = -1
+	await _relayout(false, pid)   # các quân trong ô đích nhường chỗ
 
 
 func _float_text(pid: int, text: String, col: Color) -> void:
@@ -390,6 +425,8 @@ func _play(ev: Dictionary) -> void:
 			if ev["p"] == human_id and not engine.players[human_id]["is_bot"]:
 				Audio.play("turn")
 			hud.set_current(ev["p"])
+			for i in tokens.size():
+				(tokens[i] as Character3D).set_active(i == ev["p"])
 			hud.refresh_players()
 			_focus_tile(token_tile[ev["p"]])
 			_set_state(TurnState.WAITING_FOR_TURN)
@@ -423,6 +460,7 @@ func _play(ev: Dictionary) -> void:
 			Audio.play("horn")
 			token_tile[ev["p"]] = BoardData.JAIL_TILE
 			await _relayout()
+			(tokens[ev["p"]] as Character3D).react("sigh")
 			if cam_ctl.mode != CameraController.Mode.OVERVIEW:
 				cam_ctl.focus(BoardData.JAIL_TILE, 0.6 / speed)
 			hud.notify.cancel_tag("land")   # gộp "Kẹt Xe" (tên ô) + "bị KẸT XE" thành một thông báo
@@ -453,6 +491,7 @@ func _play(ev: Dictionary) -> void:
 		"rent":
 			var payer: int = ev["p"]
 			var own: int = ev["owner"]
+			(tokens[payer] as Character3D).react("slump")
 			if (payer == human_id or own == human_id) and not engine.players[human_id]["is_bot"]:
 				hud.show_banner("%s trả %s xu thuê cho %s\n%s · %s" % [engine.players[payer]["name"], BoardData.money(ev["amount"]), engine.players[own]["name"], ev["label"], BoardData.plain_name(ev["tile"])], 1.6 / speed)
 		"building":
@@ -523,12 +562,15 @@ func _play(ev: Dictionary) -> void:
 			board.set_pot(ev["amount"])
 			hud.set_pot(ev["amount"])
 		"charity":
+			Audio.play("win", 0.0, -6.0)
+			(tokens[ev["p"]] as Character3D).react("lucky")
 			await hud.show_toast("%s nhận Quỹ Từ Thiện\n%s xu!" % [engine.players[ev["p"]]["name"], BoardData.money(ev["amount"])], 1.3 / speed)
 		"blackout":
 			season_fx.set_blackout(true)
 			await hud.show_toast("CÚP ĐIỆN DIỆN RỘNG\nTiền thuê toàn bàn −50% đến hết vòng", 1.3 / speed)
 		"lottery":
 			var txt := "Xổ số: chọn %d — ra %d\n%s" % [ev["number"], ev["roll"], "TRÚNG LỚN!" if ev["win"] else "Trượt rồi!"]
+			(tokens[ev["p"]] as Character3D).react("lucky" if ev["win"] else "jolt")
 			await hud.show_toast(txt, 1.3 / speed)
 		"landmark":
 			Audio.play("landmark")
@@ -548,12 +590,14 @@ func _play(ev: Dictionary) -> void:
 			Audio.play("bankrupt")
 			await hud.show_toast("%s PHÁ SẢN!" % engine.players[ev["p"]]["name"], 1.3 / speed)
 			tokens[ev["p"]].visible = false
+			(tokens[ev["p"]] as Character3D).set_active(false)
+			_relayout()
 			hud.refresh_players()
 		"toll":
 			Audio.play("toll")
-		"charity":
-			Audio.play("win", 0.0, -6.0)
 		"game_over":
+			for tk in tokens:
+				(tk as Character3D).set_active(false)
 			cam_ctl.overview(1.2)
 			hud.hide_roll()
 			hud.set_focus(false)
@@ -823,7 +867,6 @@ func _present_move(pid: int, path: Array, fast: bool) -> void:
 		_set_state(TurnState.MOVING_PAWN)
 		await _move_token(pid, path, fast, true)
 		_set_state(TurnState.LANDING_ANIMATION)
-		(tokens[pid] as Character3D).land()
 		cam_ctl.impact(0.05)
 		cam_ctl.focus(last, 0.7 / sp)
 		hud.show_banner(hud.tile_summary(last), 1.8 / sp, "land")
@@ -831,7 +874,6 @@ func _present_move(pid: int, path: Array, fast: bool) -> void:
 	else:
 		_set_state(TurnState.MOVING_PAWN)
 		await _move_token(pid, path, fast)
-		(tokens[pid] as Character3D).land()
 		_focus_tile(last)
 		if not fast:
 			hud.show_banner(hud.tile_summary(last), 1.4 / sp, "land")
@@ -841,9 +883,47 @@ func _present_move(pid: int, path: Array, fast: bool) -> void:
 # ---------------------------------------------------------------- phím kiểm thử (chỉ bản debug)
 var _dbg_popup: UiPopup
 var _dbg_variant := 0
+var _dbg_react := -1
+
+
+## Kiểm thử hình ảnh chuyển động: 4 quân chung một ô (xếp vòng), một quân nhảy đi rồi về,
+## sau đó lần lượt các phản ứng. Chạy: --motiondemo --shot=<thư mục>
+func _motion_demo() -> void:
+	for i in tokens.size():
+		token_tile[i] = 3
+	await _relayout(true)
+	(tokens[0] as Character3D).set_active(true)
+	cam_ctl.focus(3, 0.6)
+	await get_tree().create_timer(1.2).timeout
+	await _debug_walk(4)
+	cam_ctl.focus(3, 0.5)
+	await get_tree().create_timer(0.6).timeout
+	var kinds := ["cheer", "lucky", "jolt", "slump", "sigh", "sad"]
+	for k in kinds.size():
+		(tokens[k % tokens.size()] as Character3D).react(kinds[k])
+		await get_tree().create_timer(0.4).timeout
+
+
+## F3: cho quân đang tới lượt nhảy thử n ô rồi nhảy về (chỉ hình ảnh, không đổi trạng thái ván).
+func _debug_walk(n: int) -> void:
+	if _busy:
+		return
+	_busy = true
+	var pid: int = maxi(engine.current, 0)
+	var start: int = token_tile[pid]
+	var fwd: Array = []
+	for k in range(1, n + 1):
+		fwd.append((start + k) % BoardData.TILE_COUNT)
+	await _move_token(pid, fwd, false, cam_ctl.mode == CameraController.Mode.FOLLOW)
+	var back: Array = []
+	for k in range(n - 1, -1, -1):
+		back.append((start + k) % BoardData.TILE_COUNT)
+	await _move_token(pid, back, true)
+	_busy = false
 
 
 ## F1: xem popup mẫu (lần lượt thường / xui / may) · F2: loạt thông báo (có trùng để thử gộp)
+## F3: nhảy thử 6 ô rồi về · F4: thử vào Kẹt Xe (chỉ hình ảnh) · F5: lần lượt các phản ứng của nhân vật
 ## F6: đổi độ phân giải cửa sổ 1280×720 ↔ 1920×1080.
 func _debug_key(k: int) -> void:
 	match k:
@@ -865,6 +945,19 @@ func _debug_key(k: int) -> void:
 			hud.show_banner("Thông báo thường", 1.6)   # trùng → tự gộp
 			hud.show_toast("Bạn bị KẸT XE!", 1.6)
 			hud.show_toast("Bạn nhận Quỹ Từ Thiện 300 xu!", 1.6)
+		KEY_F3:
+			_debug_walk(6)
+		KEY_F4:
+			var pj: int = maxi(engine.current, 0)
+			token_tile[pj] = BoardData.JAIL_TILE
+			await _relayout()
+			(tokens[pj] as Character3D).react("sigh")
+			hud.show_toast("%s bị KẸT XE! (thử)" % engine.players[pj]["name"], 1.2, "jail")
+		KEY_F5:
+			var kinds := ["lucky", "jolt", "cheer", "slump", "sigh", "sad"]
+			_dbg_react = (_dbg_react + 1) % kinds.size()
+			(tokens[maxi(engine.current, 0)] as Character3D).react(kinds[_dbg_react])
+			hud.show_banner("Phản ứng: %s" % kinds[_dbg_react], 1.0)
 		KEY_F6:
 			var big := DisplayServer.window_get_size().x < 1600
 			DisplayServer.window_set_size(Vector2i(1920, 1080) if big else Vector2i(1280, 720))
@@ -924,6 +1017,8 @@ func _on_building_landed(_t: int, strength: float) -> void:
 
 func _on_speed_changed(s: float) -> void:
 	speed = s
+	for tk in tokens:
+		(tk as Character3D).anim_speed = s
 	juice.speed = s
 	Global.speed = s
 
