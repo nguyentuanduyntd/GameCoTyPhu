@@ -43,6 +43,11 @@ var building_picker: BuildingPicker
 var info_label: RichTextLabel
 
 var _pick_callback: Callable = Callable()
+# Online: đồng hồ suy nghĩ do server bắt đầu, và ai đang mất kết nối
+var online := false
+var _timer_pid := -1
+var _timer_left := 0.0
+var _offline := {}
 var _lottery_number: int = 1
 var _speeds := [1.0, 2.0, 3.0, 4.0]
 var _speed_idx := 0
@@ -581,6 +586,53 @@ func _emit(action: Dictionary) -> void:
 
 # ---------------------------------------------------------------- kết thúc
 
+# ---------------------------------------------------------------- online
+
+func start_timer(pid: int, secs: float) -> void:
+	stop_timer()
+	_timer_pid = pid
+	_timer_left = secs
+
+
+func stop_timer() -> void:
+	var pid := _timer_pid
+	_timer_pid = -1
+	if pid >= 0 and pid < cards.size():
+		_refresh_net_note(pid)
+
+
+func set_presence(pid: int, connected: bool) -> void:
+	if connected:
+		_offline.erase(pid)
+	else:
+		_offline[pid] = true
+	_refresh_net_note(pid)
+
+
+func _refresh_net_note(pid: int) -> void:
+	var card: PlayerCard = cards[pid]
+	if _offline.has(pid):
+		card.set_net_note("Mất kết nối", true)
+	elif pid == _timer_pid:
+		var s := ceili(maxf(_timer_left, 0.0))
+		card.set_net_note(("Còn %ds" % s) if pid == human_id else ("Suy nghĩ %ds" % s), s <= 5)
+	else:
+		card.set_net_note("")
+
+
+func _process(delta: float) -> void:
+	if _timer_pid < 0:
+		return
+	var before := ceili(_timer_left)
+	_timer_left -= delta
+	if ceili(_timer_left) != before:
+		_refresh_net_note(_timer_pid)
+		if _timer_pid == human_id and ceili(_timer_left) <= 5 and ceili(_timer_left) > 0:
+			Audio.play("click", 0.0, -8.0)
+	if _timer_left <= 0.0:
+		_timer_left = 0.0
+
+
 func show_game_over(ev: Dictionary) -> void:
 	clear_decision()
 	waiting_label.text = ""
@@ -627,8 +679,11 @@ func show_game_over(ev: Dictionary) -> void:
 		if w <= 0:
 			m.add_theme_color_override("font_color", pal.danger)
 		h.add_child(m)
-	over_popup.add_action("Chơi lại", func(): restart_requested.emit(), "primary")
-	over_popup.add_action("Về sảnh", func(): menu_requested.emit())
+	if online:
+		over_popup.add_action("Về sảnh", func(): menu_requested.emit(), "primary")
+	else:
+		over_popup.add_action("Chơi lại", func(): restart_requested.emit(), "primary")
+		over_popup.add_action("Về sảnh", func(): menu_requested.emit())
 
 
 # ---------------------------------------------------------------- tiện ích

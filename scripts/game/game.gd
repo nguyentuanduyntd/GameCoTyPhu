@@ -18,6 +18,13 @@ var speed := 1.0
 
 var _queue: Array = []
 var _busy := false
+# ---- online (lockstep): nước đi đến từ server theo số thứ tự, áp vào engine rồi diễn như thường
+var online := false
+var _applied := 0            # số nước đã áp dụng
+var _inbox: Array = []       # nước đi nhận được nhưng chưa áp (đang bận diễn)
+var _stepping := false       # đang trong bước chuẩn bị quyết định (mở bộ bài...) → chưa áp nước mới
+var _room_code := ""
+var _reconnect_t := -1.0
 var _picking: Array = []
 var cam_ctl: CameraController
 var camera: Camera3D
@@ -50,7 +57,7 @@ var _shot_dir := ""
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo") or args.has("--pickerdemo") or args.has("--juicedemo") or args.has("--motiondemo")
+	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo") or args.has("--pickerdemo") or args.has("--juicedemo") or args.has("--motiondemo") or args.has("--netbot")
 	for a in args:
 		if a.begins_with("--carddemo="):
 			_autotest = true
@@ -77,7 +84,18 @@ func _ready() -> void:
 	engine = GameEngine.new()
 	motion = PawnMotion.new()
 	add_child(motion)
-	var cfg := Global.make_player_configs(args.has("--autotest") or args.has("--showcase") or args.has("--typeshow") or args.has("--builddemo") or args.has("--juicedemo"))
+	online = Global.online and not Net.start_info.is_empty()
+	var cfg: Array
+	var seed := 0
+	var rounds := Global.max_rounds
+	if online:
+		cfg = Net.start_info["configs"]
+		seed = int(Net.start_info["seed"])
+		rounds = int(Net.start_info["rounds"])
+		human_id = int(Net.start_info["seat"])
+		_room_code = String(Net.room.get("code", _room_code))
+	else:
+		cfg = Global.make_player_configs(args.has("--autotest") or args.has("--showcase") or args.has("--typeshow") or args.has("--builddemo") or args.has("--juicedemo"))
 	for i in cfg.size():
 		var tok := Character3D.new().setup(cfg[i]["character"], Color(PLAYER_COLORS[i]))
 		add_child(tok)
@@ -100,12 +118,13 @@ func _ready() -> void:
 	add_child(cards_ui)
 	cards_ui.draw_pressed.connect(_on_card_draw)
 	cards_ui.confirm_pressed.connect(_on_card_confirm)
-	var events := engine.setup(cfg, 0, Global.max_rounds)
+	var events := engine.setup(cfg, seed, rounds)
+	hud.online = online
 	hud.setup(engine, PLAYER_COLORS, human_id)
 	hud.set_speed_display(speed)
 	hud.action_chosen.connect(_on_human_action)
 	hud.pick_mode.connect(_on_pick_mode)
-	hud.menu_requested.connect(func(): get_tree().change_scene_to_file("res://scenes/lobby.tscn"))
+	hud.menu_requested.connect(_leave_to_lobby)
 	hud.restart_requested.connect(func(): get_tree().reload_current_scene())
 	hud.speed_changed.connect(_on_speed_changed)
 	hud.cam_toggled.connect(_on_cam_toggled)
@@ -148,6 +167,11 @@ func _ready() -> void:
 				board.set_tile_state(t, t % cfg.size(), GameEngine.LANDMARK, false)
 			elif BoardData.is_property(t):
 				board.set_tile_state(t, t % cfg.size(), 0, false)
+	if online:
+		if _autotest:
+			_start_autotest()
+		_online_begin(events)
+		return
 	if _autotest:
 		_start_autotest()
 	if args.has("--showcase") or args.has("--typeshow"):
@@ -635,8 +659,20 @@ func _play(ev: Dictionary) -> void:
 
 
 func _after_queue() -> void:
+	_stepping = true
+	await _after_queue_inner()
+	_stepping = false
+	if online and not _busy:
+		_drain_net()
+
+
+func _after_queue_inner() -> void:
 	board.update_info(engine)
 	hud.refresh_players()
+	if online:
+		if _drain_net():
+			return
+		Net.send_ready(_applied)
 	if engine.game_over:
 		return
 	var pend := engine.pending
@@ -655,11 +691,13 @@ func _after_queue() -> void:
 	if pend["type"] == "turn":
 		_set_state(TurnState.WAITING_FOR_ROLL)
 		hud.set_focus(false)
-	if p["is_bot"]:
+	if not _is_local(pend["p"]):
 		if pend["type"] == "turn":
 			hud.show_roll_waiting(p["name"])
 		else:
 			hud.show_waiting("%s đang suy nghĩ..." % p["name"])
+		if online:
+			return   # chờ nước đi từ server
 		await get_tree().create_timer(0.45 / speed).timeout
 		if engine.pending != pend:
 			return
@@ -668,6 +706,8 @@ func _after_queue() -> void:
 		_feed(engine.act(pend["p"], a))
 	else:
 		hud.show_decision(pend)
+		if _net_idle_left() > 0:
+			return   # kiểm thử: cố tình không bấm để server xử hết giờ
 		if _autotest:
 			var delay := 0.6
 			for arg in OS.get_cmdline_user_args():
@@ -680,9 +720,11 @@ func _after_queue() -> void:
 ## Đấu giá: người chơi thật trả giá qua panel (có đồng hồ), máy "cân nhắc" một chút rồi quyết định.
 func _auction_step(pend: Dictionary, p: Dictionary) -> void:
 	hud.show_waiting("")
-	if not p["is_bot"]:
+	if _is_local(pend["p"]):
 		var cfg := EconomyConfig.get_default()
 		var secs := maxf(cfg.auction_human_min_seconds, cfg.auction_human_seconds / speed)
+		if online:
+			secs = ServerRoom.AUCTION_TIME + 1.0   # server tính giờ chính; panel chỉ hiển thị
 		hud.auction_panel.prompt(pend, secs)
 		if _autotest and not OS.get_cmdline_user_args().has("--auctiondemo"):
 			await get_tree().create_timer(0.5).timeout
@@ -690,6 +732,8 @@ func _auction_step(pend: Dictionary, p: Dictionary) -> void:
 		return
 	if hud.auction_panel.visible:
 		hud.auction_panel.on_thinking(pend["p"])
+	if online:
+		return
 	var delay := 0.08 if _auction_fast else randf_range(0.35, 0.9)
 	await get_tree().create_timer(delay / speed).timeout
 	if engine.pending != pend:
@@ -701,13 +745,15 @@ func _auction_step(pend: Dictionary, p: Dictionary) -> void:
 func _choose_step(pend: Dictionary, p: Dictionary) -> void:
 	hud.show_waiting("")
 	hud.hide_roll()
-	if not p["is_bot"]:
+	if _is_local(pend["p"]):
 		hud.building_picker.open(pend)
 		if _autotest and not OS.get_cmdline_user_args().has("--pickerdemo"):
 			await get_tree().create_timer(0.8).timeout
 			hud.building_picker.autopress()
 		return
 	hud.show_waiting("%s đang chọn công trình..." % p["name"])
+	if online:
+		return
 	await get_tree().create_timer(0.4 / speed).timeout
 	if engine.pending != pend:
 		return
@@ -718,6 +764,9 @@ func _choose_step(pend: Dictionary, p: Dictionary) -> void:
 func _submit_choice(action: Dictionary) -> void:
 	if _busy or engine.pending.is_empty() or engine.pending["type"] != "choose_building" or engine.pending["p"] != human_id:
 		return
+	if online:
+		_send_local(action)
+		return
 	var evs := engine.act(human_id, action)
 	if not evs.is_empty():
 		_feed(evs)
@@ -725,6 +774,9 @@ func _submit_choice(action: Dictionary) -> void:
 
 func _submit_auction(action: Dictionary) -> void:
 	if _busy or engine.pending.is_empty() or engine.pending["type"] != "auction_bid" or engine.pending["p"] != human_id:
+		return
+	if online:
+		_send_local(action)
 		return
 	var evs := engine.act(human_id, action)
 	if not evs.is_empty():
@@ -735,7 +787,7 @@ func _submit_auction(action: Dictionary) -> void:
 func _card_step(pend: Dictionary, p: Dictionary) -> void:
 	hud.clear_decision()
 	hud.show_waiting("")
-	var human: bool = not p["is_bot"]
+	var human: bool = _is_local(pend["p"])
 	match String(pend["type"]):
 		"draw_card":
 			if not cards_ui.is_open:
@@ -745,7 +797,7 @@ func _card_step(pend: Dictionary, p: Dictionary) -> void:
 				if _autotest:
 					await get_tree().create_timer(0.5).timeout
 					cards_ui.autopress()
-			else:
+			elif not online:
 				await get_tree().create_timer(0.5 / speed).timeout
 				_submit_card({"action": "draw"})
 		"card_reveal", "card_pick":
@@ -755,7 +807,7 @@ func _card_step(pend: Dictionary, p: Dictionary) -> void:
 				if _autotest:
 					await get_tree().create_timer(0.6).timeout
 					cards_ui.autopress()
-			else:
+			elif not online:
 				await get_tree().create_timer(0.9 / speed).timeout
 				var a := BotAI.decide(engine, pend)
 				await cards_ui.close(int(a.get("index", 0)))
@@ -869,6 +921,10 @@ func _on_card_confirm(index: int) -> void:
 ## Gửi hành động của bước rút bài; engine kiểm tra hợp lệ nên hiệu ứng chỉ áp dụng đúng một lần.
 func _submit_card(action: Dictionary) -> void:
 	if _busy or engine.pending.is_empty() or not CARD_STEPS.has(String(engine.pending["type"])):
+		return
+	if online:
+		if int(engine.pending["p"]) == human_id:
+			_send_local(action)
 		return
 	var evs := engine.act(engine.pending["p"], action)
 	if not evs.is_empty():
@@ -1058,6 +1114,9 @@ func _on_human_action(action: Dictionary) -> void:
 		return
 	if is_turn_roll:
 		_set_state(TurnState.ROLLING_DICE)
+	if online:
+		_send_local(action)
+		return
 	var evs := engine.act(human_id, action)
 	if evs.is_empty():
 		hud.show_decision(engine.pending)
@@ -1065,14 +1124,205 @@ func _on_human_action(action: Dictionary) -> void:
 	_feed(evs)
 
 
+# ---------------------------------------------------------------- online
+
+## Quân `pid` do người ngồi ở máy này điều khiển? (online: đúng ghế của mình; offline: mọi người thật)
+func _is_local(pid: int) -> bool:
+	if online:
+		return pid == human_id
+	return not engine.players[pid]["is_bot"]
+
+
+func _online_begin(events: Array) -> void:
+	Net.move_received.connect(_on_net_move)
+	Net.timer_started.connect(func(pid, secs): hud.start_timer(pid, secs))
+	Net.notice.connect(func(t): hud.show_banner(t, 2.2))
+	Net.message.connect(_on_net_message)
+	Net.disconnected.connect(_on_net_lost)
+	Net.game_started.connect(func(_info): get_tree().reload_current_scene())
+	for i in (Net.room.get("seats", []) as Array).size():
+		if not Net.room["seats"][i]["connected"]:
+			hud.set_presence(i, false)
+	var log: Array = Net.start_info.get("log", [])
+	if log.is_empty():
+		_feed(events)
+		return
+	# Vào lại giữa ván: chạy nhanh mọi nước đã đi (không diễn), rồi dựng lại bàn cờ theo trạng thái
+	for en in log:
+		if en["k"] == "forfeit":
+			engine.forfeit(en["p"])
+		else:
+			engine.act(en["p"], en["a"])
+	_applied = log.size()
+	var h := String(Net.start_info.get("hash", ""))
+	if h != "" and engine.state_hash() != h:
+		push_warning("Trạng thái sau khi tải lại khác server.")
+	_sync_visuals()
+	hud.show_banner("Đã vào lại ván — chơi tiếp nào!", 2.0)
+	_after_queue()
+
+
+## Dựng lại toàn bộ hình ảnh theo trạng thái engine (sau khi tải lại ván).
+func _sync_visuals() -> void:
+	board.rebuild_from(engine)
+	for i in tokens.size():
+		token_tile[i] = int(engine.players[i]["pos"])
+		tokens[i].visible = engine.players[i]["alive"]
+		(tokens[i] as Character3D).set_active(i == engine.current)
+	_relayout(true)
+	board.set_season(engine.season, engine.season_event)
+	season_fx.set_season(engine.season, engine.season_event)
+	hud.set_season(engine.season, engine.season_event)
+	hud.set_round(engine.round_num)
+	board.set_pot(engine.charity_pot)
+	hud.set_pot(engine.charity_pot)
+	if engine.blackout_round == engine.round_num:
+		season_fx.set_blackout(true)
+	_turn_player = engine.current
+	hud.set_current(engine.current)
+	hud.refresh_players()
+	board.update_info(engine)
+	_focus_tile(token_tile[engine.current])
+
+
+## Kiểm thử: --netidle=K → K lần đầu tới lượt thì không bấm gì.
+func _net_idle_left() -> int:
+	if not online:
+		return 0
+	var k := 0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--netidle="):
+			k = int(arg.substr(10))
+	var used: int = Global.get_meta("netidle_used", 0)
+	if used < k:
+		Global.set_meta("netidle_used", used + 1)
+		return k - used
+	return 0
+
+
+func _send_local(action: Dictionary) -> void:
+	hud.stop_timer()
+	Net.send_action(action)
+
+
+func _on_net_move(m: Dictionary) -> void:
+	_inbox.append(m)
+	if not _busy and not _stepping:
+		_drain_net()
+
+
+## Áp nước tiếp theo (đúng số thứ tự) nếu có. Trả về true nếu đã bắt đầu áp một nước.
+func _drain_net() -> bool:
+	while not _inbox.is_empty() and int(_inbox[0]["n"]) <= _applied:
+		_inbox.pop_front()
+	if _inbox.is_empty():
+		return false
+	_inbox.sort_custom(func(x, y): return int(x["n"]) < int(y["n"]))
+	if int(_inbox[0]["n"]) != _applied + 1:
+		return false
+	_apply_net(_inbox.pop_front())
+	return true
+
+
+func _apply_net(m: Dictionary) -> void:
+	_busy = true
+	hud.stop_timer()
+	var pend := engine.pending
+	var a: Dictionary = m.get("a", {})
+	# Bộ bài đang mở mà có kết quả xác nhận / chọn lá: diễn đóng bài trước khi áp
+	if m["k"] == "act" and not pend.is_empty() and ["card_reveal", "card_pick"].has(String(pend["type"])) and cards_ui.is_open:
+		await cards_ui.close(int(a.get("index", 0)))
+	# Nước của mình bị server quyết thay (hết giờ): đóng các bảng đang mở
+	if not pend.is_empty() and int(pend["p"]) == human_id:
+		hud.clear_decision()
+		hud.hide_roll()
+		if hud.building_picker.visible:
+			hud.building_picker.close()
+	var evs: Array = engine.forfeit(m["p"]) if m["k"] == "forfeit" else engine.act(m["p"], a)
+	_applied = int(m["n"])
+	# kiểm thử: --netdrop=N giả lập rớt mạng sau nước thứ N (một lần)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--netdrop=") and _applied == int(arg.substr(10)) and not Global.has_meta("netdropped"):
+			Global.set_meta("netdropped", true)
+			Net._ws.close()
+	_busy = false
+	if engine.state_hash() != String(m.get("h", "")):
+		_resync("Lệch trạng thái với server — đang đồng bộ lại...")
+		return
+	if evs.is_empty():
+		_after_queue()
+	else:
+		_feed(evs)
+
+
+func _on_net_message(m: Dictionary) -> void:
+	match String(m.get("t", "")):
+		"presence":
+			var seat := int(m["seat"])
+			hud.set_presence(seat, bool(m["connected"]))
+			if seat != human_id and seat < engine.players.size():
+				hud.show_banner("%s %s" % [engine.players[seat]["name"], "đã vào lại" if m["connected"] else "mất kết nối"], 1.8)
+		"reject":
+			# server từ chối (thường do vừa hết giờ): nếu vẫn tới lượt mình thì hiện lại lựa chọn
+			if not _busy and not _stepping and _inbox.is_empty() and not engine.pending.is_empty() and int(engine.pending["p"]) == human_id:
+				_after_queue()
+
+
+func _resync(text: String) -> void:
+	hud.show_banner(text, 2.0)
+	if _room_code != "":
+		Net.join_room(_room_code)   # server gửi lại toàn bộ ván → cảnh được tải lại
+
+
+func _on_net_lost() -> void:
+	hud.show_banner("Mất kết nối tới server — đang kết nối lại...", 3.0)
+	_reconnect_t = 0.0
+
+
+func _process(delta: float) -> void:
+	if online and _reconnect_t >= 0.0 and not Net.is_online():
+		_reconnect_t -= delta
+		if _reconnect_t <= 0.0:
+			_reconnect_t = 3.0
+			# giữ nguyên token đã dùng khi vào phòng → server nhận lại đúng ghế
+			Net.connect_to(Net.url if Net.url != "" else Global.server_url)
+			Net.join_room(_room_code)
+
+
+func _leave_to_lobby() -> void:
+	if online:
+		Net.leave_room()
+		Net.close()
+		Net.start_info = {}
+		Global.online = false
+	get_tree().change_scene_to_file("res://scenes/lobby.tscn")
+
+
 # ---------------------------------------------------------------- kiểm thử tự động
 
 func _exit_tree() -> void:
 	if _autotest and engine:
-		print("AUTOTEST round=%d game_over=%s state=%d pending=%s cache=%s fps=%d" % [engine.round_num, engine.game_over, turn_state, engine.pending.get("type", "-"), MeshCache.stats(), Engine.get_frames_per_second()])
+		print("AUTOTEST round=%d game_over=%s state=%d pending=%s cache=%s fps=%d online=%s applied=%d hash=%s" % [engine.round_num, engine.game_over, turn_state, engine.pending.get("type", "-"), MeshCache.stats(), Engine.get_frames_per_second(), online, _applied, engine.state_hash()])
 
 
 func _start_autotest() -> void:
+	if OS.get_cmdline_user_args().has("--until-over"):
+		# chạy tới hết ván (kiểm thử online), chụp ảnh mỗi --every giây nếu có --shot
+		var every2 := 6.0
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--every="):
+				every2 = float(a.substr(8))
+		var k := 0
+		var t0 := Time.get_ticks_msec()
+		while not engine.game_over and Time.get_ticks_msec() - t0 < 600000:
+			await get_tree().create_timer(every2).timeout
+			if _shot_dir != "" and k < 40:
+				DirAccess.make_dir_recursive_absolute(_shot_dir)
+				get_viewport().get_texture().get_image().save_png(_shot_dir.path_join("game_%02d.png" % k))
+				k += 1
+		await get_tree().create_timer(2.0).timeout
+		get_tree().quit()
+		return
 	if _shot_dir != "":
 		DirAccess.make_dir_recursive_absolute(_shot_dir)
 		var shots := 0

@@ -17,6 +17,10 @@ var _stat_land: Label
 var _stat_house: Label
 var _stat_spec: Label
 var _status: Label
+var _parts: Array = []
+## Ghi chú online (đồng hồ suy nghĩ, mất kết nối) — hiện đầu dòng trạng thái.
+var _net_note := ""
+var _net_urgent := false
 var _turn_icon: TextureRect
 var _glow: Panel
 var _shown := 0
@@ -211,8 +215,30 @@ func refresh(engine: GameEngine, p: Dictionary) -> void:
 	for d in p["delayed"]:
 		var amt: int = d["amount"]
 		parts.append("%s %s%s (%d lượt)" % [d["text"], "+" if amt > 0 else "−", BoardData.money(absi(amt)), d["turns"]])
-	_status.text = " · ".join(parts)
-	_status.visible = parts.size() > 0
+	_parts = parts
+	_render_status()
+
+
+func _render_status() -> void:
+	var all: Array = []
+	if _net_note != "":
+		all.append(_net_note)
+	all.append_array(_parts)
+	_status.text = " · ".join(all)
+	_status.visible = all.size() > 0
+	if _net_urgent:
+		_status.add_theme_color_override("font_color", UiPalette.get_default().danger.lightened(0.35))
+	else:
+		_status.add_theme_color_override("font_color", UiPalette.get_default().gold)
+
+
+## Online: hiện đồng hồ suy nghĩ / "Mất kết nối" trên thẻ.
+func set_net_note(text: String, urgent: bool = false) -> void:
+	if text == _net_note and urgent == _net_urgent:
+		return
+	_net_note = text
+	_net_urgent = urgent
+	_render_status()
 
 
 func set_active(on: bool) -> void:

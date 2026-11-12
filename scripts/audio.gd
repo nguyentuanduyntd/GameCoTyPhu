@@ -36,6 +36,14 @@ func _ready() -> void:
 		_music.append(m)
 
 
+## Thoát game giữa lúc đang phát: dừng và gỡ stream để không còn tham chiếu (tránh cảnh báo rò rỉ).
+func _exit_tree() -> void:
+	for p in _pool + _music:
+		(p as AudioStreamPlayer).stop()
+		(p as AudioStreamPlayer).stream = null
+	_sounds.clear()
+
+
 func play(sound: String, pitch_jitter: float = 0.0, volume_db: float = 0.0) -> void:
 	if not _sounds.has(sound):
 		return

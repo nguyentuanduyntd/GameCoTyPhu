@@ -61,6 +61,8 @@ func _ready() -> void:
 	for a in args:
 		if a == "--roomdemo":
 			_room_demo()
+		if a.begins_with("--netauto="):
+			_net_auto(a.substr(10))
 	for a in args:
 		if a.begins_with("--menushot="):
 			_shot(a.substr(11))
@@ -563,6 +565,52 @@ func _room_demo() -> void:
 	await get_tree().create_timer(0.5).timeout
 	Net.send({"t": "add_bot"})
 	Net.send({"t": "add_bot"})
+
+
+## Kiểm thử online tự động (không cần bấm):
+##   --netauto=host:<số người thật> [--rounds-online=N] [--netcodefile=đường_dẫn] [--server-url=ws://...]
+##   --netauto=join [--netcodefile=...]  (đọc mã phòng từ tệp do máy chủ phòng ghi)
+## Máy chủ phòng chờ đủ người thật, thêm máy cho đủ 4 chỗ rồi bắt đầu.
+func _net_auto(spec: String) -> void:
+	var codefile := "user://netcode.txt"
+	var rounds := 2
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--netcodefile="):
+			codefile = a.substr(14)
+		if a.begins_with("--server-url="):
+			Global.server_url = a.substr(13)
+		if a.begins_with("--rounds-online="):
+			rounds = int(a.substr(16))
+	Net.player_name = "Tự động " + ("Chủ" if spec.begins_with("host") else str(randi() % 90 + 10))
+	Net.character = Global.character
+	Net.token = "auto-%d" % randi()
+	Net.connect_to(Global.server_url)
+	if spec.begins_with("host"):
+		var need := int(spec.get_slice(":", 1)) if spec.contains(":") else 2
+		Net.create_room({"rounds": rounds, "difficulty": 1, "think": 15})
+		while not _in_room():
+			await get_tree().process_frame
+		var f := FileAccess.open(codefile, FileAccess.WRITE)
+		f.store_string(String(Net.room["code"]))
+		f.close()
+		while true:
+			await get_tree().create_timer(0.5).timeout
+			var seats: Array = Net.room.get("seats", [])
+			var humans := 0
+			for st in seats:
+				if not st["is_bot"]:
+					humans += 1
+			if humans >= need:
+				break
+		for k in maxi(0, 4 - (Net.room["seats"] as Array).size()):
+			Net.send({"t": "add_bot"})
+		await get_tree().create_timer(0.8).timeout
+		Net.send({"t": "start_game"})
+	else:
+		while not FileAccess.file_exists(codefile):
+			await get_tree().create_timer(0.3).timeout
+		await get_tree().create_timer(0.3).timeout
+		Net.join_room(FileAccess.get_file_as_string(codefile).strip_edges())
 
 
 func _open_settings() -> void:
