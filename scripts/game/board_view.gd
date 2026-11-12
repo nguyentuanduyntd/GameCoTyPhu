@@ -26,6 +26,20 @@ var pot_label: Label3D
 var player_colors: Array = []
 var _mat_cache := {}
 
+## Phát ra khi công trình mọc xong chạm đất (để rung camera, phát tiếng búa).
+signal building_landed(tile: int, strength: float)
+## Hệ số tốc độ game (x1/x2/x4) — mọi hoạt ảnh xây dựng chia theo hệ số này.
+var anim_speed := 1.0
+## Hàm trả về loại công trình của ô (Phase 3 gắn vào engine); mặc định "generic".
+var kind_of: Callable = func(_t: int) -> String: return "generic"
+var flag_roots: Array = []
+var _shown_owner: Array = []
+var _shown_level: Array = []
+var _shown_kind: Array = []
+var _dust: Array = []
+var _dust_i := 0
+var _t := 0.0
+
 
 func build(colors: Array) -> void:
 	player_colors = colors
@@ -33,6 +47,14 @@ func build(colors: Array) -> void:
 	for i in BoardData.TILE_COUNT:
 		_build_tile(i)
 	_build_center()
+	for i in BoardData.TILE_COUNT:
+		_shown_owner.append(-1)
+		_shown_level.append(0)
+		_shown_kind.append("")
+	for k in 3:
+		var d := _make_dust()
+		add_child(d)
+		_dust.append(d)
 	festival_marker = _make_festival_marker()
 	festival_marker.visible = false
 	add_child(festival_marker)
@@ -200,6 +222,12 @@ func _build_tile(i: int) -> void:
 	root.add_child(broot)
 	building_roots.append(broot)
 
+	# Chỗ cắm cờ chủ sở hữu (góc ngoài bên trái của ô)
+	var froot := Node3D.new()
+	froot.position = Vector3(-size.x / 2 + 0.1, 0.1, size.y / 2 - 0.15) if not corner else Vector3(-0.7, 0.1, 0.7)
+	root.add_child(froot)
+	flag_roots.append(froot)
+
 	# Viền sáng khi được chọn
 	var hl := MeshInstance3D.new()
 	var hm := BoxMesh.new()
@@ -335,38 +363,148 @@ func _tree(p: Vector3, s: float) -> Node3D:
 
 # ---------------------------------------------------------------- cập nhật trạng thái
 
-func set_tile_state(t: int, owner_id: int, lvl: int) -> void:
-	if BoardData.is_province(t):
+## Cập nhật hình ảnh ô: cờ chủ sở hữu + công trình theo loại và cấp.
+## animate = false khi dựng lại trạng thái (tải ván, trưng bày) — không có hoạt ảnh.
+func set_tile_state(t: int, owner_id: int, lvl: int, animate: bool = true) -> void:
+	var province := BoardData.is_province(t)
+	var kind := String(kind_of.call(t)) if province else ""
+	var prev_owner: int = _shown_owner[t]
+	var prev_level: int = _shown_level[t]
+	var prev_kind: String = _shown_kind[t]
+	_shown_owner[t] = owner_id
+	_shown_level[t] = lvl
+	_shown_kind[t] = kind
+	if province:
 		map.set_province_owner(t, owner_id, lvl)
 	var strip: MeshInstance3D = owner_strips[t]
 	strip.visible = owner_id >= 0
 	if owner_id >= 0:
-		strip.material_override = _mat(player_colors[owner_id])
-	var broot: Node3D = building_roots[t]
-	for c in broot.get_children():
-		c.queue_free()
-	if owner_id < 0 or lvl <= 0:
+		strip.material_override = MeshCache.mat(Color(player_colors[owner_id]))
+	_update_flag(t, owner_id, prev_owner, animate)
+	if owner_id == prev_owner and lvl == prev_level and kind == prev_kind:
 		return
-	var col: String = player_colors[owner_id]
-	var w: float = W - 0.15
-	match lvl:
-		1:
-			broot.add_child(_house(Vector3(0, 0, 0), 0.26, 0.2, col))
-		2:
-			broot.add_child(_house(Vector3(-w / 4, 0, 0), 0.24, 0.24, col))
-			broot.add_child(_house(Vector3(w / 4, 0, 0), 0.24, 0.32, col))
-		3:
-			var hotel := _box(Vector3(w * 0.8, 0.6, 0.32), col)
-			hotel.position.y = 0.3
-			broot.add_child(hotel)
-			var roof := _box(Vector3(w * 0.85, 0.06, 0.36), "#37474f")
-			roof.position.y = 0.63
-			broot.add_child(roof)
-		4:
-			broot.add_child(LandmarkBuilder.build(String(BoardData.tile(t)["landmark"]), Color(col)))
+	var broot: Node3D = building_roots[t]
+	var old: Array = broot.get_children()
+	var node: Node3D = null
+	if owner_id >= 0:
+		var col := Color(player_colors[owner_id])
+		if not province:
+			if BoardData.is_property(t):
+				node = BuildingBuilder.infra(BoardData.plain_name(t), col)
+		elif lvl > 0:
+			node = BuildingBuilder.build(kind, lvl, col, t)
+	if not animate:
+		for c in old:
+			c.queue_free()
+		if node:
+			broot.add_child(node)
+		return
+	if old.is_empty() and node == null:
+		return
+	var sp := maxf(anim_speed, 0.25)
 	var tw := create_tween()
-	broot.scale = Vector3(1, 0.05, 1)
-	tw.tween_property(broot, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if old.size() > 0:
+		tw.set_parallel(true)
+		for c in old:
+			tw.tween_property(c, "scale", Vector3.ZERO, 0.16 / sp).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		tw.chain().tween_callback(_free_nodes.bind(old))
+	if node:
+		broot.add_child(node)
+		node.scale = Vector3.ZERO
+		# mua mới / đổi chủ: hiệu ứng mạnh; nâng cấp: vừa; bị hạ cấp: nhẹ
+		var strength := 1.0
+		if owner_id == prev_owner and prev_level > 0:
+			strength = 0.6 if lvl > prev_level else 0.25
+		tw.chain().tween_property(node, "scale", Vector3(1.12, 1.28, 1.12), 0.24 / sp).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.chain().tween_property(node, "scale", Vector3(0.96, 0.92, 0.96), 0.07 / sp)
+		tw.chain().tween_callback(_land_fx.bind(t, strength))
+		tw.chain().tween_property(node, "scale", Vector3.ONE, 0.1 / sp)
+
+
+## Dựng lại toàn bộ bàn cờ từ trạng thái engine (dùng khi tải ván / khôi phục), không hoạt ảnh.
+func rebuild_from(engine: GameEngine) -> void:
+	for t in BoardData.TILE_COUNT:
+		set_tile_state(t, engine.owner[t], engine.level[t], false)
+	set_festival(engine.festival_tile)
+
+
+func _update_flag(t: int, owner_id: int, prev_owner: int, animate: bool) -> void:
+	if owner_id == prev_owner:
+		return
+	var froot: Node3D = flag_roots[t]
+	for c in froot.get_children():
+		c.queue_free()
+	if owner_id < 0:
+		return
+	var f := BuildingBuilder.flag(Color(player_colors[owner_id]))
+	froot.add_child(f)
+	if animate:
+		f.scale = Vector3(1, 0.01, 1)
+		create_tween().tween_property(f, "scale", Vector3.ONE, 0.3 / maxf(anim_speed, 0.25)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _free_nodes(nodes: Array) -> void:
+	for c in nodes:
+		if is_instance_valid(c):
+			c.queue_free()
+
+
+## Bụi bay khi công trình chạm đất + báo cho game rung camera, phát tiếng.
+func _land_fx(t: int, strength: float) -> void:
+	var d: CPUParticles3D = _dust[_dust_i]
+	_dust_i = (_dust_i + 1) % _dust.size()
+	d.global_position = (building_roots[t] as Node3D).global_position
+	d.amount = int(lerpf(8.0, 26.0, strength))
+	d.restart()
+	building_landed.emit(t, strength)
+
+
+func _make_dust() -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.035
+	mesh.height = 0.07
+	mesh.radial_segments = 6
+	mesh.rings = 3
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mesh.material = mat
+	p.mesh = mesh
+	p.amount = 20
+	p.lifetime = 0.7
+	p.one_shot = true
+	p.explosiveness = 0.9
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.25
+	p.direction = Vector3.UP
+	p.spread = 85.0
+	p.initial_velocity_min = 0.5
+	p.initial_velocity_max = 1.2
+	p.gravity = Vector3(0, -1.2, 0)
+	p.damping_min = 1.0
+	p.damping_max = 2.0
+	p.scale_amount_min = 0.7
+	p.scale_amount_max = 1.6
+	var fade := Gradient.new()
+	fade.colors = PackedColorArray([Color(0.85, 0.8, 0.72, 0.9), Color(0.85, 0.8, 0.72, 0.0)])
+	p.color_ramp = fade
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.emitting = false
+	return p
+
+
+func _process(delta: float) -> void:
+	_t += delta
+	# cờ phấp phới
+	for i in flag_roots.size():
+		var froot: Node3D = flag_roots[i]
+		if froot.get_child_count() == 0:
+			continue
+		var cloth := froot.get_child(0).get_node_or_null("Cloth") as Node3D
+		if cloth:
+			cloth.rotation.y = sin(_t * 3.0 + i * 0.7) * 0.35
 
 
 func update_info(engine: GameEngine) -> void:
@@ -406,41 +544,7 @@ func highlight(tiles: Array) -> void:
 
 # ---------------------------------------------------------------- tiện ích hình khối
 
-func _house(p: Vector3, size: float, h: float, col: String) -> Node3D:
-	var n := Node3D.new()
-	n.position = p
-	var body := _box(Vector3(size, h, size), col)
-	body.position.y = h / 2
-	n.add_child(body)
-	var roof := MeshInstance3D.new()
-	var pm := PrismMesh.new()
-	pm.size = Vector3(size * 1.2, size * 0.6, size * 1.1)
-	roof.mesh = pm
-	roof.position.y = h + size * 0.3
-	roof.material_override = _mat("#c62828")
-	n.add_child(roof)
-	return n
 
-
-func _landmark(col: String) -> Node3D:
-	var n := Node3D.new()
-	var widths := [0.9, 0.7, 0.5]
-	var y := 0.0
-	for k in 3:
-		var tier := _box(Vector3(widths[k], 0.18, 0.34 - k * 0.06), "#ffca28" if k % 2 == 0 else col, k % 2 == 0)
-		tier.position.y = y + 0.09
-		n.add_child(tier)
-		y += 0.2
-	var spire := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 0.0
-	cm.bottom_radius = 0.14
-	cm.height = 0.4
-	spire.mesh = cm
-	spire.position.y = y + 0.2
-	spire.material_override = _mat("#ffd54f", true)
-	n.add_child(spire)
-	return n
 
 
 func _make_festival_marker() -> Node3D:

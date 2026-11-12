@@ -131,7 +131,7 @@ func set_province_owner(t: int, owner_id: int, lvl: int) -> void:
 	flag.position = Vector3(0.1, h - 0.07, 0)
 	flag.material_override = _flat_mat(Color(player_colors[owner_id]))
 	pin.add_child(flag)
-	if lvl >= 4:
+	if lvl >= GameEngine.LANDMARK:
 		var star := MeshInstance3D.new()
 		var sm := SphereMesh.new()
 		sm.radius = 0.05

@@ -387,11 +387,14 @@ func show_decision(pend: Dictionary) -> void:
 			_add_btn("Bỏ qua", {"action": "pass"})
 		"build":
 			var t: int = pend["tile"]
-			decision_title.text = "Xây dựng tại %s" % BoardData.plain_name(t)
-			decision_desc.text = "Hiện tại: %s. Tiền thuê đang là %s." % [GameEngine.LEVEL_NAMES[engine.level[t]], BoardData.money(engine.rent(t))]
+			var cur: int = engine.level[t]
+			decision_title.text = "Nâng cấp %s?" % BoardData.plain_name(t) if cur > 0 else "Xây công trình tại %s?" % BoardData.plain_name(t)
+			var rm: Array = EconomyConfig.get_default().rent_mult
+			decision_desc.text = "Hiện tại: %s · thuê %s xu. Lên cấp cao hơn: thuê cơ bản ×%s." % [GameEngine.LEVEL_NAMES[cur], BoardData.money(engine.rent(t)), str(rm[mini(cur + 1, rm.size() - 1)])]
 			for o in pend["options"]:
-				_add_btn("%s (%s)" % [GameEngine.LEVEL_NAMES[o["level"]], BoardData.money(o["cost"])], {"action": "build", "level": o["level"]}, true)
-			_add_btn("Bỏ qua", {"action": "pass"})
+				var lv: int = o["level"]
+				_add_btn("Lên %s — %s xu" % [GameEngine.LEVEL_NAMES[lv], BoardData.money(o["cost"])], {"action": "build", "level": lv}, true)
+			_add_btn("Để sau", {"action": "pass"})
 		"takeover":
 			var t: int = pend["tile"]
 			decision_title.text = "Thâu tóm %s?" % BoardData.plain_name(t)
@@ -605,7 +608,7 @@ func _tile_desc(t: int) -> String:
 	if td["type"] == BoardData.T.INFRA:
 		return "Hạ tầng. Tiền thuê tăng theo số hạ tầng sở hữu: 50 / 100 / 200 / 400."
 	var g: Dictionary = BoardData.GROUPS[td["group"]]
-	var base := _round5(td["price"] * GameEngine.RENT_MULT[0])
+	var base := _round5(td["price"] * EconomyConfig.get_default().rent_mult[0])
 	return "Vùng %s (%s, %d tỉnh). Thuê cơ bản %s. Đặc sản: %s. Danh thắng: %s." % [
 		g["name"], BoardData.REGION_NAMES[g["region"]], engine.group_tiles(td["group"]).size(),
 		BoardData.money(base), td["specialty"], td["landmark"]]
@@ -759,8 +762,9 @@ func show_tile_info(t: int) -> void:
 		else:
 			lines.append("Chưa có chủ")
 		var rents: Array = []
-		for l in 5:
-			rents.append(BoardData.money(_round5(td["price"] * GameEngine.RENT_MULT[l])))
+		var rm: Array = EconomyConfig.get_default().rent_mult
+		for l in rm.size():
+			rents.append(BoardData.money(_round5(td["price"] * float(rm[l]))))
 		lines.append("Thuê cơ bản theo cấp: " + " / ".join(rents))
 		lines.append("Đặc sản: %s" % td["specialty"])
 		lines.append("Danh thắng: %s" % td["landmark"])

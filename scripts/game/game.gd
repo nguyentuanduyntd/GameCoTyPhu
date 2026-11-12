@@ -44,7 +44,7 @@ var _shot_dir := ""
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo")
+	_autotest = args.has("--autotest") or args.has("--autotest-human") or args.has("--showcase") or args.has("--auctiondemo") or args.has("--typeshow") or args.has("--builddemo")
 	for a in args:
 		if a.begins_with("--carddemo="):
 			_autotest = true
@@ -66,9 +66,10 @@ func _ready() -> void:
 	add_child(season_fx)
 	season_fx.setup(sun, env, sky_mat, BoardView.H)
 	_setup_camera()
+	board.building_landed.connect(_on_building_landed)
 
 	engine = GameEngine.new()
-	var cfg := Global.make_player_configs(args.has("--autotest") or args.has("--showcase"))
+	var cfg := Global.make_player_configs(args.has("--autotest") or args.has("--showcase") or args.has("--typeshow") or args.has("--builddemo"))
 	for i in cfg.size():
 		var tok := Character3D.new().setup(cfg[i]["character"], Color(PLAYER_COLORS[i]))
 		add_child(tok)
@@ -116,13 +117,27 @@ func _ready() -> void:
 			cam_ctl.yaw = deg_to_rad(float(a.substr(9)))
 			cam_ctl.orbit(0.0)
 		cam_ctl.snap()
+	if args.has("--typeshow"):
+		# Trưng bày công trình: mỗi tỉnh một loại × cấp khác nhau, hạ tầng có chủ
+		var kinds := ["generic", "restaurant", "homestay", "market", "workshop"]
+		board.kind_of = func(t: int) -> String: return kinds[(t / 2) % kinds.size()]
+		for t in BoardData.TILE_COUNT:
+			if BoardData.is_province(t):
+				board.set_tile_state(t, t % cfg.size(), 1 + t % 3, false)
+			elif BoardData.is_property(t):
+				board.set_tile_state(t, t % cfg.size(), 0, false)
 	if args.has("--showcase"):
 		for t in BoardData.TILE_COUNT:
 			if BoardData.is_province(t):
-				board.set_tile_state(t, t % cfg.size(), 4)
+				board.set_tile_state(t, t % cfg.size(), GameEngine.LANDMARK, false)
+			elif BoardData.is_property(t):
+				board.set_tile_state(t, t % cfg.size(), 0, false)
 	if _autotest:
 		_start_autotest()
-	if args.has("--showcase"):
+	if args.has("--showcase") or args.has("--typeshow"):
+		return
+	if args.has("--builddemo"):
+		_build_demo()
 		return
 	for a in args:
 		if a.begins_with("--carddemo="):
@@ -391,12 +406,17 @@ func _play(ev: Dictionary) -> void:
 				cam_ctl.focus(BoardData.JAIL_TILE, 0.6 / speed)
 			await hud.show_toast("%s bị KẸT XE!" % engine.players[ev["p"]]["name"], 0.9 / speed)
 		"tile":
-			board.set_tile_state(ev["tile"], ev["owner"], ev["level"])
-			if ev["owner"] >= 0 and ev["level"] < 4:
-				Audio.play("buy" if ev["level"] == 0 else "build", 0.05)
+			var t_ev: int = ev["tile"]
+			var grew: bool = ev["owner"] >= 0 and (ev["level"] > board._shown_level[t_ev] or ev["owner"] != board._shown_owner[t_ev])
+			var new_owner: bool = ev["owner"] >= 0 and ev["owner"] != board._shown_owner[t_ev]
+			board.anim_speed = speed
+			board.set_tile_state(t_ev, ev["owner"], ev["level"])
+			if new_owner:
+				Audio.play("buy_keng", 0.05, -2.0)
 			if ev["owner"] >= 0 and ev["owner"] == engine.current:
 				tokens[ev["owner"]].cheer()
-			await get_tree().create_timer(0.12 / speed).timeout
+			# chờ công trình mọc xong rồi mới sang sự kiện tiếp theo
+			await get_tree().create_timer((0.55 if grew and (ev["level"] > 0 or not BoardData.is_province(t_ev)) else 0.15) / speed).timeout
 		"festival":
 			board.set_festival(ev["tile"])
 		"card":
@@ -615,6 +635,24 @@ func _card_demo(spec: String) -> void:
 	get_tree().quit()
 
 
+## Kiểm thử hoạt ảnh xây dựng: mua → cấp 1 → cấp 2 → Danh Thắng → bị hạ cấp, chụp ảnh từng pha.
+func _build_demo() -> void:
+	cam_ctl.focus(5, 0.01)
+	board.kind_of = func(_t: int) -> String: return "restaurant"
+	var steps := [[0, 0.5], [1, 0.25], [2, 0.25], [3, 0.25], [2, 0.25]]
+	var k := 0
+	await get_tree().create_timer(1.2).timeout
+	for st in steps:
+		board.anim_speed = 1.0
+		board.set_tile_state(5, 0, st[0])
+		await get_tree().create_timer(st[1]).timeout
+		_demo_shot("build_%d_mid" % k)
+		await get_tree().create_timer(0.9).timeout
+		_demo_shot("build_%d_done" % k)
+		k += 1
+	get_tree().quit()
+
+
 func _demo_shot(name: String) -> void:
 	if _shot_dir == "":
 		return
@@ -694,6 +732,12 @@ func _finish_turn_presentation(next_pid: int) -> void:
 		hud.show_banner("Được tung tiếp!" if next_pid == _turn_player else "Hoàn thành lượt!", 1.0 / speed)
 
 
+func _on_building_landed(_t: int, strength: float) -> void:
+	if strength >= 0.5:
+		Audio.play("hammer", 0.1, -3.0 if strength >= 0.9 else -7.0)
+		cam_ctl.impact(0.03 * strength)
+
+
 func _on_speed_changed(s: float) -> void:
 	speed = s
 	Global.speed = s
@@ -720,7 +764,7 @@ func _on_human_action(action: Dictionary) -> void:
 
 func _exit_tree() -> void:
 	if _autotest and engine:
-		print("AUTOTEST round=%d game_over=%s state=%d pending=%s" % [engine.round_num, engine.game_over, turn_state, engine.pending.get("type", "-")])
+		print("AUTOTEST round=%d game_over=%s state=%d pending=%s cache=%s fps=%d" % [engine.round_num, engine.game_over, turn_state, engine.pending.get("type", "-"), MeshCache.stats(), Engine.get_frames_per_second()])
 
 
 func _start_autotest() -> void:

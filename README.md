@@ -73,6 +73,16 @@ Xem panel đấu giá (Hà Nội được đem ra đấu giá ngay đầu ván, 
 godot --path . -- --auctiondemo --speed=1 --shots=8 --every=0.7 --shot=screenshots
 ```
 
+Trưng bày công trình (mỗi tỉnh một loại × cấp, hạ tầng có chủ) và xem hoạt ảnh xây từng cấp:
+
+```bash
+godot --path . -- --typeshow --shots=1 --every=1.5 --shot=screenshots
+```
+
+```bash
+godot --path . -- --builddemo --shot=screenshots
+```
+
 Chạy ván toàn bot ở tốc độ x4 và tự chụp 6 ảnh màn hình (`--autotest-human` để người chơi số 1 tự bấm nút):
 
 ```bash

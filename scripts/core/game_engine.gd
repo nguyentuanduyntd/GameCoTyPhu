@@ -16,8 +16,8 @@ const LOTTERY_BETS := [50, 100, 200]
 const LOTTERY_PAYOUT := 5
 const SPECIALTY_PRICE := 60
 const MAX_SPECIALTIES := 9
-const RENT_MULT := [0.2, 0.8, 1.8, 3.2, 5.0]
-const BUILD_MULT := [0.0, 0.5, 0.6, 0.8, 1.2]
+## Cấp công trình: 0 đất trống, 1 nhà nhỏ, 2 nhà lớn, 3 Danh Thắng. Hệ số thuê/xây nằm trong data/economy.tres.
+const LANDMARK := 3
 const INFRA_RENT := [0, 50, 100, 200, 400]
 const TAKEOVER_MULT := 1.5
 const MAX_LEVEL_ON_BUY := 1
@@ -36,7 +36,7 @@ const SEASON_DESC := [
 	"Tây Bắc, Đông Bắc, Miền Tây +50% tiền thuê.",
 	"Các tỉnh Miền Bắc −30% tiền thuê.",
 ]
-const LEVEL_NAMES := ["Đất trống", "Nhà cấp 4", "Nhà phố", "Khách sạn", "Danh Thắng"]
+const LEVEL_NAMES := ["Đất trống", "Cấp 1 · Nhà nhỏ", "Cấp 2 · Nhà lớn", "Cấp 3 · Danh Thắng"]
 
 var players: Array = []
 var owner: Array = []
@@ -55,6 +55,7 @@ var ranking: Array = []
 var eliminated: Array = []
 var rng := RandomNumberGenerator.new()
 
+var _cfg := EconomyConfig.get_default()
 var _events: Array = []
 var _decks: Dictionary = {}
 var charity_pot: int = 0
@@ -169,7 +170,7 @@ func owned_tiles(pid: int) -> Array:
 
 
 func base_build_cost(t: int, lvl: int) -> int:
-	return _round5(BoardData.tile(t)["price"] * BUILD_MULT[lvl])
+	return _round5(BoardData.tile(t)["price"] * _cfg.build_mult[lvl])
 
 
 func build_cost(pid: int, t: int, lvl: int) -> int:
@@ -226,7 +227,7 @@ func rent(t: int) -> int:
 		return _round5(INFRA_RENT[infra_count(o)] * (0.5 if blackout_round == round_num else 1.0))
 	if td["type"] == BoardData.T.TOLL:
 		return TOLL_FEE * TOLL_LAND_MULT
-	var r: float = td["price"] * RENT_MULT[level[t]]
+	var r: float = td["price"] * _cfg.rent_mult[level[t]]
 	if owns_group(o, td["group"]):
 		r *= 2.0
 	if t == festival_tile:
@@ -275,16 +276,16 @@ func build_options(pid: int, t: int) -> Array:
 		return res
 	var cur: int = level[t]
 	var cash: int = players[pid]["cash"]
-	if cur >= 4:
+	if cur >= LANDMARK:
 		return res
-	if cur == 3:
-		if group_count(pid, BoardData.tile(t)["group"]) >= 2:
-			var c := build_cost(pid, t, 4)
+	if cur == LANDMARK - 1:
+		if group_count(pid, BoardData.tile(t)["group"]) >= _cfg.landmark_group_min:
+			var c := build_cost(pid, t, LANDMARK)
 			if cash >= c:
-				res.append({"level": 4, "cost": c})
+				res.append({"level": LANDMARK, "cost": c})
 		return res
 	var total := 0
-	for l in range(cur + 1, 4):
+	for l in range(cur + 1, LANDMARK):
 		total += build_cost(pid, t, l)
 		if cash >= total:
 			res.append({"level": l, "cost": total})
@@ -303,7 +304,7 @@ func giai_toa_targets(pid: int) -> Array:
 	var res: Array = []
 	for t in BoardData.TILE_COUNT:
 		var o: int = owner[t]
-		if o >= 0 and o != pid and level[t] >= 1 and level[t] <= 3:
+		if o >= 0 and o != pid and level[t] >= 1 and level[t] < LANDMARK:
 			res.append(t)
 	return res
 
@@ -576,7 +577,7 @@ func _act_build(p: Dictionary, kind: String, a: Dictionary) -> bool:
 	pending = {}
 	_pay(p, opt["cost"], -1, "Xây dựng")
 	_set_tile(t, p["id"], lvl)
-	if lvl == 4:
+	if lvl == LANDMARK:
 		_log("%s xây Danh Thắng %s tại %s!" % [p["name"], BoardData.tile(t)["landmark"], BoardData.plain_name(t)])
 		_push({"t": "landmark", "p": p["id"], "tile": t})
 	else:
@@ -801,7 +802,7 @@ func _apply_storm() -> void:
 	var by_owner := {}
 	for g in [4, 5]:
 		for t in _group_tiles[g]:
-			if owner[t] >= 0 and level[t] >= 1 and level[t] <= 3:
+			if owner[t] >= 0 and level[t] >= 1 and level[t] < LANDMARK:
 				if not by_owner.has(owner[t]):
 					by_owner[owner[t]] = []
 				by_owner[owner[t]].append(t)
@@ -982,7 +983,7 @@ func _land_property(p: Dictionary, t: int) -> void:
 			return
 		if BoardData.is_province(t):
 			_give_specialty(p, t)
-		if level[t] < 4 and owner[t] == o and players[o]["alive"]:
+		if level[t] < LANDMARK and owner[t] == o and players[o]["alive"]:
 			var price := takeover_price(p["id"], t)
 			if p["cash"] >= price:
 				pending = {"type": "takeover", "p": p["id"], "tile": t, "price": price, "from": o}
@@ -1182,9 +1183,9 @@ func card_tile_options(pid: int, c: Dictionary) -> Array:
 					res.append(t)
 		"build_anywhere":
 			for t in owned_tiles(pid):
-				if not BoardData.is_province(t) or level[t] >= 4:
+				if not BoardData.is_province(t) or level[t] >= LANDMARK:
 					continue
-				if level[t] == 3 and group_count(pid, BoardData.tile(t)["group"]) < 2:
+				if level[t] == LANDMARK - 1 and group_count(pid, BoardData.tile(t)["group"]) < _cfg.landmark_group_min:
 					continue
 				if cash >= card_price(pid, t, c):
 					res.append(t)
@@ -1327,7 +1328,7 @@ func _resolve_tile(p: Dictionary, c: Dictionary, t: int) -> void:
 func _upgrade_random(p: Dictionary) -> bool:
 	var cands: Array = []
 	for t in owned_tiles(p["id"]):
-		if BoardData.is_province(t) and level[t] < 3:
+		if BoardData.is_province(t) and level[t] < LANDMARK - 1:
 			cands.append(t)
 	if cands.is_empty():
 		return false

@@ -6,6 +6,7 @@ Mọi tài nguyên trong game phải là **tự làm** hoặc có giấy phép *
 |---|---|---|
 | Engine | Godot Engine 4.7 | MIT |
 | Mô hình bàn cờ, nhà, 34 danh thắng, 8 nhân vật, xúc xắc | Tự dựng bằng code (khối cơ bản của Godot) | Của dự án |
+| Công trình 4 loại × 2 cấp, mô hình hạ tầng, cờ chủ sở hữu | Tự dựng bằng code (BuildingBuilder + MeshCache dùng chung mesh/material) | Của dự án |
 | Bản đồ Việt Nam cách điệu | Tự vẽ từ toạ độ kinh/vĩ độ gần đúng (có Hoàng Sa, Trường Sa, Phú Quốc) | Của dự án |
 | Hiệu ứng mùa (hoa, lá, mưa, pháo hoa) | Hạt CPUParticles3D tự cấu hình | Của dự án |
 | 22 hiệu ứng âm thanh (gồm auction_bid, auction_win, buy_keng, hammer), 3 bản nhạc nền | Tự tổng hợp bằng tools/gen_audio.py (Karplus-Strong, sin, nhiễu) | Của dự án |

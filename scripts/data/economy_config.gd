@@ -3,6 +3,14 @@ extends Resource
 ## Hằng số cân bằng có thể chỉnh trong Godot Inspector (mở data/economy.tres).
 ## Engine, bot và giao diện đều đọc từ đây — không hardcode rải rác.
 
+@export_group("Công trình")
+## Hệ số tiền thuê theo cấp (0 = đất trống, 1 = nhà nhỏ, 2 = nhà lớn, 3 = Danh Thắng) × giá đất.
+@export var rent_mult: Array[float] = [0.2, 1.0, 2.2, 4.5]
+## Chi phí xây từng cấp × giá đất (phần tử 0 bỏ qua).
+@export var build_mult: Array[float] = [0.0, 0.6, 0.9, 1.4]
+## Danh Thắng cần sở hữu ít nhất bao nhiêu tỉnh trong vùng.
+@export var landmark_group_min: int = 2
+
 @export_group("Đấu giá")
 ## Giá khởi điểm = tỉ lệ × giá niêm yết.
 @export var auction_start_ratio: float = 0.5

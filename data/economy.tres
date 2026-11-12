@@ -4,6 +4,9 @@
 
 [resource]
 script = ExtResource("1")
+rent_mult = Array[float]([0.2, 1.0, 2.2, 4.5])
+build_mult = Array[float]([0.0, 0.6, 0.9, 1.4])
+landmark_group_min = 2
 auction_start_ratio = 0.5
 auction_step_ratio = 0.1
 auction_round_to = 5

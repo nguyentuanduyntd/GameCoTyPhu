@@ -23,7 +23,6 @@ const WATER := "#4fc3f7"
 const GREEN := "#558b2f"
 const ROOF := "#b71c1c"
 
-static var _mats := {}
 
 
 static func build(landmark_name: String, accent: Color) -> Node3D:
@@ -328,76 +327,31 @@ static func _flag_pin(n: Node3D, at: Vector3, accent: Color) -> void:
 	n.add_child(flag)
 
 
-# ---------------------------------------------------------------- khối cơ bản
+# ---------------------------------------------------------------- khối cơ bản (mesh/material dùng chung qua MeshCache)
 
-static func _mat(col: Variant, glow: bool = false, alpha: float = 1.0) -> StandardMaterial3D:
-	var c: Color = col if col is Color else Color(col)
-	var key := "%s|%s|%s" % [c.to_html(), glow, alpha]
-	if _mats.has(key):
-		return _mats[key]
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(c, alpha)
-	m.roughness = 0.75
-	if alpha < 1.0:
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	if glow:
-		m.emission_enabled = true
-		m.emission = c
-		m.emission_energy_multiplier = 0.35
-	_mats[key] = m
-	return m
-
-
-static func _mi(mesh: Mesh, col: Variant, glow: bool = false, alpha: float = 1.0) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.material_override = _mat(col, glow, alpha)
-	return mi
+static func _c(col: Variant) -> Color:
+	return col if col is Color else Color(col)
 
 
 static func _box(size: Vector3, col: Variant, glow: bool = false, alpha: float = 1.0) -> MeshInstance3D:
-	var bm := BoxMesh.new()
-	bm.size = size
-	return _mi(bm, col, glow, alpha)
+	return MeshCache.mi(MeshCache.box(size), _c(col), Vector3.ZERO, glow, alpha)
 
 
 static func _roof(size: Vector3, col: Variant) -> MeshInstance3D:
-	var pm := PrismMesh.new()
-	pm.size = size
-	return _mi(pm, col)
+	return MeshCache.mi(MeshCache.prism(size), _c(col))
 
 
 static func _cone(r: float, h: float, col: Variant, glow: bool = false) -> MeshInstance3D:
-	var cm := CylinderMesh.new()
-	cm.top_radius = 0.0
-	cm.bottom_radius = r
-	cm.height = h
-	cm.radial_segments = 10
-	return _mi(cm, col, glow)
+	return MeshCache.mi(MeshCache.cyl(0.0, r, h, 10), _c(col), Vector3.ZERO, glow)
 
 
 static func _cyl(top: float, bottom: float, h: float, col: Variant, alpha: float = 1.0) -> MeshInstance3D:
-	var cm := CylinderMesh.new()
-	cm.top_radius = top
-	cm.bottom_radius = bottom
-	cm.height = h
-	cm.radial_segments = 20
-	return _mi(cm, col, false, alpha)
+	return MeshCache.mi(MeshCache.cyl(top, bottom, h, 20), _c(col), Vector3.ZERO, false, alpha)
 
 
 static func _sphere(r: float, col: Variant, glow: bool = false) -> MeshInstance3D:
-	var sm := SphereMesh.new()
-	sm.radius = r
-	sm.height = r * 2
-	sm.radial_segments = 12
-	sm.rings = 6
-	return _mi(sm, col, glow)
+	return MeshCache.mi(MeshCache.sphere(r, 12), _c(col), Vector3.ZERO, glow)
 
 
 static func _capsule(r: float, h: float, col: Variant) -> MeshInstance3D:
-	var cm := CapsuleMesh.new()
-	cm.radius = r
-	cm.height = maxf(h, r * 2)
-	cm.radial_segments = 8
-	cm.rings = 3
-	return _mi(cm, col)
+	return MeshCache.mi(MeshCache.capsule(r, h), _c(col))

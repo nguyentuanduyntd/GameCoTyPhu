@@ -114,10 +114,18 @@ Luật vẫn do engine quyết định; phần trình diễn chạy theo máy tr
 
 ### 3.2. Đất & xây dựng
 - Dừng ở tỉnh chưa ai mua → mua hoặc bỏ qua. **Bỏ qua thì ô được đem ra đấu giá** cho những người còn lại (xem 3.2b).
-- **Xây khi dừng lại đúng ô của mình** (không bắt buộc sở hữu cả nhóm như luật cổ điển → ván nhanh hơn).
-- 4 cấp: **Nhà cấp 4 → Nhà phố → Khách sạn → Danh Thắng**.
-  - Danh Thắng chỉ xây được khi đã có Khách sạn và sở hữu ≥ 2 tỉnh trong nhóm.
-  - Mỗi tỉnh có 1 mô hình danh thắng riêng (vd: Hà Nội – Hồ Gươm, Huế – Đại Nội, Quảng Ninh – Vịnh Hạ Long, Lâm Đồng – Hồ Xuân Hương…).
+- **Xây / nâng cấp khi dừng lại đúng ô của mình** (popup "Nâng cấp … lên Cấp X — giá …", có thể nhảy nhiều cấp nếu đủ tiền, trừ Danh Thắng).
+- **3 cấp công trình** (hệ số trong `data/economy.tres`):
+
+  | Cấp | Tên | Chi phí xây cấp đó | Tiền thuê cơ bản |
+  |---|---|---|---|
+  | 0 | Đất trống | — | 0,2 × giá đất |
+  | 1 | Nhà nhỏ | 0,6 × giá | 1,0 × giá |
+  | 2 | Nhà lớn (thêm tầng) | 0,9 × giá | 2,2 × giá |
+  | 3 | **Danh Thắng** của tỉnh | 1,4 × giá | 4,5 × giá |
+
+  Danh Thắng cần sở hữu ≥ 2 tỉnh trong vùng và không thể bị thâu tóm.
+- **Hình ảnh**: có chủ là cắm **cờ màu người chơi** (phấp phới) ở góc ô; công trình **mọc lên** có nảy vượt, bụi bay, rung camera nhẹ và tiếng búa khi chạm đất; nâng cấp thì công trình cũ thu lại rồi công trình mới mọc lên (nhẹ hơn mua mới); bị hạ cấp (bão, Giải Tỏa, bán bớt) thì đổi về mô hình nhỏ hơn. Ô hạ tầng có mô hình cố định khi có chủ: xe khách + biển trạm, nhà ga + đường ray, cần cẩu + container, tháp điều khiển + máy bay, chòi thu phí BOT.
 - **Sở hữu trọn nhóm vùng**: tiền thuê ×2 cho cả nhóm.
 
 ### 3.2b. Đấu giá
