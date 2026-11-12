@@ -34,12 +34,12 @@ func _ready() -> void:
 	var speed_row := HBoxContainer.new()
 	speed_row.add_child(_label("Tốc độ ván mặc định"))
 	var speed := OptionButton.new()
-	for s in [1, 2, 4]:
+	for s in [1, 2, 3, 4]:
 		speed.add_item("x%d" % s)
-	speed.select(maxi(0, [1.0, 2.0, 4.0].find(Global.speed)))
+	speed.select(maxi(0, [1.0, 2.0, 3.0, 4.0].find(Global.speed)))
 	speed.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	speed.item_selected.connect(func(i):
-		Global.speed = [1.0, 2.0, 4.0][i]
+		Global.speed = [1.0, 2.0, 3.0, 4.0][i]
 		_commit())
 	speed_row.add_child(speed)
 	v.add_child(speed_row)

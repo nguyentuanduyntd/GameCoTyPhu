@@ -15,6 +15,10 @@ var human_id: int = 0
 
 var root: Control
 var player_boxes: Array = []
+var cards: Array = []
+var top_bar: TopBar
+var event_log: EventLog
+var avatars: AvatarFactory
 var _shown_cash := {}
 var _cash_tw := {}
 var round_label: Label
@@ -47,7 +51,7 @@ var info_label: RichTextLabel
 
 var _pick_callback: Callable = Callable()
 var _lottery_number: int = 1
-var _speeds := [1.0, 2.0, 4.0]
+var _speeds := [1.0, 2.0, 3.0, 4.0]
 var _speed_idx := 0
 
 
@@ -68,58 +72,57 @@ func _build() -> void:
 	root = Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var th := Theme.new()
-	th.default_font_size = 17
-	root.theme = th
 	add_child(root)
 
-	# --- Cột trái: người chơi
+	# --- Cột trái: thẻ nhân vật (neo trái, tự co theo nội dung)
 	var left := VBoxContainer.new()
-	left.position = Vector2(10, 10)
-	left.custom_minimum_size = Vector2(215, 0)
-	left.add_theme_constant_override("separation", 4)
+	_anchor(left, Control.PRESET_TOP_LEFT, 12, 12, 252, 12)
+	left.grow_horizontal = Control.GROW_DIRECTION_END
+	left.add_theme_constant_override("separation", 6)
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(left)
 	for p in engine.players:
-		var box := _player_box(p)
-		left.add_child(box["panel"])
-		player_boxes.append(box)
+		var card := PlayerCard.new()
+		card.setup(p, Color(colors[p["id"]]), p["id"] == human_id and not p["is_bot"])
+		left.add_child(card)
+		cards.append(card)
+		player_boxes.append({"panel": card})
+	avatars = AvatarFactory.new()
+	add_child(avatars)
+	avatars.ready_avatar.connect(func(pid, tex): cards[pid].set_avatar(tex))
+	for p in engine.players:
+		avatars.make(p["id"], p["character"], Color(colors[p["id"]]))
 
-	# --- Trên giữa: vòng / mùa
-	var top := PanelContainer.new()
-	top.add_theme_stylebox_override("panel", _style(Color(0, 0, 0, 0.55), 10))
-	_anchor(top, Control.PRESET_CENTER_TOP, -220, 8, 220, 40)
-	root.add_child(top)
-	round_label = Label.new()
-	round_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	round_label.add_theme_color_override("font_color", Color("#fff8e1"))
-	top.add_child(round_label)
+	# --- Trên giữa: Vòng / Mùa / Quỹ
+	top_bar = TopBar.new()
+	_anchor(top_bar, Control.PRESET_CENTER_TOP, -250, 10, 250, 52)
+	root.add_child(top_bar)
 
-	# --- Phải: nhật ký + nút tốc độ/menu
+	# --- Phải: cụm nút (neo phải, mọc sang trái nên không bao giờ bị cắt) + nhật ký
 	var right := VBoxContainer.new()
-	_anchor(right, Control.PRESET_TOP_RIGHT, -360, 10, -10, 260)
+	_anchor(right, Control.PRESET_TOP_RIGHT, -322, 10, -12, 10)
+	right.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	right.add_theme_constant_override("separation", 8)
+	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(right)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_END
+	row.add_theme_constant_override("separation", 6)
 	right.add_child(row)
-	speed_btn = _button("Tốc độ x1", _on_speed)
+	speed_btn = _icon_button("speed", "x1", "Tốc độ ván (x1 → x2 → x3 → x4)", _on_speed)
 	row.add_child(speed_btn)
-	cam_btn = _button("Góc nhìn: Điện ảnh", func():
-		var on := cam_btn.text.ends_with("Toàn cảnh")
+	cam_btn = _icon_button("camera", "Điện ảnh", "Góc nhìn: Điện ảnh (bám quân cờ) / Toàn cảnh", func():
+		var on := cam_btn.text == "Toàn cảnh"
 		set_cam_auto(on)
 		cam_toggled.emit(on))
 	row.add_child(cam_btn)
-	row.add_child(_button("Cài đặt", func(): add_child(SettingsPanel.new())))
-	row.add_child(_button("Menu", func(): menu_requested.emit()))
-	log_panel = PanelContainer.new()
-	log_panel.add_theme_stylebox_override("panel", _style(Color(0, 0, 0, 0.5), 10))
-	right.add_child(log_panel)
-	log_box = RichTextLabel.new()
-	log_box.custom_minimum_size = Vector2(270, 200)
-	log_box.scroll_following = true
-	log_box.bbcode_enabled = true
-	log_box.add_theme_font_size_override("normal_font_size", 13)
-	log_box.add_theme_color_override("default_color", Color("#eeeeee"))
-	log_panel.add_child(log_box)
+	row.add_child(_icon_button("gear", "", "Cài đặt", func(): add_child(SettingsPanel.new())))
+	row.add_child(_icon_button("menu", "", "Về sảnh", func(): menu_requested.emit()))
+	event_log = EventLog.new()
+	event_log.setup(engine.players, colors)
+	event_log.custom_minimum_size = Vector2(310, 0)
+	right.add_child(event_log)
+	log_panel = event_log
 
 	# --- Dưới giữa: bảng quyết định
 	decision_panel = PanelContainer.new()
@@ -200,127 +203,49 @@ func _build() -> void:
 	info_panel.visible = false
 
 
-# ---------------------------------------------------------------- bảng người chơi
+# ---------------------------------------------------------------- thẻ người chơi / thanh trên / nhật ký
 
-func _player_box(p: Dictionary) -> Dictionary:
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _style(Color(0, 0, 0, 0.55), 10, Color(colors[p["id"]]), 0))
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 0)
-	panel.add_child(v)
-	var name_lbl := Label.new()
-	name_lbl.text = String(p["name"]) + ("  ★" if p["id"] == human_id and not p["is_bot"] else "")
-	name_lbl.add_theme_color_override("font_color", Color(colors[p["id"]]).lightened(0.35))
-	name_lbl.add_theme_font_size_override("font_size", 15)
-	v.add_child(name_lbl)
-	var char_lbl := Label.new()
-	char_lbl.text = CardsData.character(p["character"])["name"]
-	char_lbl.add_theme_font_size_override("font_size", 12)
-	char_lbl.add_theme_color_override("font_color", Color("#bdbdbd"))
-	v.add_child(char_lbl)
-	var cash_lbl := Label.new()
-	cash_lbl.add_theme_font_size_override("font_size", 17)
-	cash_lbl.add_theme_color_override("font_color", Color("#ffd54f"))
-	v.add_child(cash_lbl)
-	var status_lbl := Label.new()
-	status_lbl.add_theme_font_size_override("font_size", 12)
-	status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_lbl.custom_minimum_size = Vector2(190, 0)
-	status_lbl.add_theme_color_override("font_color", Color("#e0e0e0"))
-	v.add_child(status_lbl)
-	var box := {"panel": panel, "cash": cash_lbl, "status": status_lbl}
-	_set_cash_label(cash_lbl, p["cash"])
-	return box
-
-
-func _set_cash_label(lbl: Label, cash: int) -> void:
-	lbl.text = BoardData.money(cash) + " xu"
-
-
-## Cập nhật tiền: chạy số mượt (lên xanh, xuống đỏ) thay vì đổi cái rụp. Tắt hiệu ứng mua đất thì đổi ngay.
 func set_cash(pid: int, cash: int, animate: bool = false, duration: float = 0.6) -> void:
-	var lbl: Label = player_boxes[pid]["cash"]
-	var from: int = _shown_cash.get(pid, cash)
-	_shown_cash[pid] = cash
-	if _cash_tw.has(pid) and (_cash_tw[pid] as Tween).is_valid():
-		(_cash_tw[pid] as Tween).kill()
-	if not animate or Global.buy_fx == 0 or from == cash:
-		_set_cash_label(lbl, cash)
-		lbl.modulate = Color.WHITE
-		return
-	var tw := create_tween()
-	_cash_tw[pid] = tw
-	lbl.modulate = Color("#ff8a80") if cash < from else Color("#b9f6ca")
-	tw.tween_method(func(v: float): _set_cash_label(lbl, int(round(v))), float(from), float(cash), maxf(duration, 0.1)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(lbl, "modulate", Color.WHITE, 0.25)
+	(cards[pid] as PlayerCard).set_cash(cash, animate and Global.buy_fx > 0, duration)
 
 
 func set_current(pid: int) -> void:
-	for i in player_boxes.size():
-		var panel: PanelContainer = player_boxes[i]["panel"]
-		var active := i == pid
-		var bg := Color(0.25, 0.18, 0.05, 0.85) if active else Color(0, 0, 0, 0.55)
-		panel.add_theme_stylebox_override("panel", _style(bg, 10, Color(colors[i]), 6 if active else 0))
+	for i in cards.size():
+		(cards[i] as PlayerCard).set_active(i == pid)
 
 
 func refresh_players() -> void:
 	for p in engine.players:
-		var box: Dictionary = player_boxes[p["id"]]
-		if int(_shown_cash.get(p["id"], -1)) != int(p["cash"]):
-			set_cash(p["id"], p["cash"])
-		var parts: Array = []
-		if not p["alive"]:
-			parts.append("ĐÃ PHÁ SẢN")
-			box["panel"].modulate = Color(1, 1, 1, 0.45)
-		else:
-			var owned := engine.owned_tiles(p["id"])
-			var nb := 0
-			for t in owned:
-				if engine.level[t] > 0:
-					nb += 1
-			var sc := engine.specialty_counts(p["id"])
-			parts.append("Đất %d · Nhà %d · Đ.sản %d/%d/%d" % [owned.size(), nb, sc[0], sc[1], sc[2]])
-			if p["cards"].size() > 0:
-				var names: Array = []
-				for c in p["cards"]:
-					names.append(CardsData.SKILLS[c]["name"])
-				parts.append("Thẻ: " + ", ".join(names))
-			for d in p["delayed"]:
-				var amt: int = d["amount"]
-				parts.append("%s %s%s sau %d lượt" % [d["text"], "+" if amt > 0 else "−", BoardData.money(absi(amt)), d["turns"]])
-			if p["one_die"]:
-				parts.append("Lượt sau tung 1 viên")
-			if p["in_jail"]:
-				parts.append("ĐANG KẸT XE")
-			if p["train_pending"]:
-				parts.append("Chờ đi tàu")
-		box["status"].text = " · ".join(parts)
+		(cards[p["id"]] as PlayerCard).refresh(engine, p)
+	top_bar.update(engine)
 
 
-func set_round(n: int) -> void:
-	_update_top(n)
+func set_round(_n: int) -> void:
+	top_bar.update(engine)
 
 
 func set_season(_s: int, _ev: Dictionary) -> void:
-	_update_top(engine.round_num)
+	top_bar.update(engine)
 
 
-func _update_top(n: int) -> void:
-	var s := "Vòng %d/%d  ·  Mùa %s" % [mini(n, engine.max_rounds), engine.max_rounds, GameEngine.SEASON_NAMES[engine.season]]
-	var en: String = engine.season_event.get("name", "")
-	if en != "":
-		s += "  ·  " + en
-	s += "  ·  Quỹ: %s" % BoardData.money(engine.charity_pot)
-	round_label.text = s
-	round_label.tooltip_text = GameEngine.SEASON_DESC[engine.season]
-
-
-func set_pot(_amount: int) -> void:
-	_update_top(engine.round_num)
+func set_pot(amount: int) -> void:
+	top_bar.set_pot(amount)
 
 
 func add_log(text: String) -> void:
-	log_box.append_text(text + "\n")
+	event_log.add_entry(text)
+
+
+func _icon_button(icon: String, text: String, tip: String, cb: Callable) -> Button:
+	var b := _button(text, cb)
+	b.icon = UiIcons.get_icon(icon)
+	b.expand_icon = false
+	b.tooltip_text = tip
+	b.custom_minimum_size = Vector2(48 if text == "" else 0, 46)
+	b.add_theme_constant_override("icon_max_width", 26)
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER if text == "" else HORIZONTAL_ALIGNMENT_LEFT
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	return b
 
 
 # ---------------------------------------------------------------- thông báo
@@ -768,12 +693,12 @@ func _anchor(c: Control, preset: int, l: float, t: float, r: float, b: float) ->
 
 func _on_speed() -> void:
 	_speed_idx = (_speed_idx + 1) % _speeds.size()
-	speed_btn.text = "Tốc độ x%d" % int(_speeds[_speed_idx])
+	speed_btn.text = "x%d" % int(_speeds[_speed_idx])
 	speed_changed.emit(_speeds[_speed_idx])
 
 
 func set_cam_auto(on: bool) -> void:
-	cam_btn.text = "Góc nhìn: Điện ảnh" if on else "Góc nhìn: Toàn cảnh"
+	cam_btn.text = "Điện ảnh" if on else "Toàn cảnh"
 
 
 func hide_tile_info() -> void:
@@ -834,7 +759,7 @@ func show_tile_info(t: int) -> void:
 
 func set_speed_display(speed: float) -> void:
 	_speed_idx = maxi(0, _speeds.find(speed))
-	speed_btn.text = "Tốc độ x%d" % int(_speeds[_speed_idx])
+	speed_btn.text = "x%d" % int(_speeds[_speed_idx])
 
 
 func _button(text: String, cb: Callable) -> Button:
