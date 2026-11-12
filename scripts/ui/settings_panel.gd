@@ -44,6 +44,20 @@ func _ready() -> void:
 	speed_row.add_child(speed)
 	v.add_child(speed_row)
 
+	var q_row := HBoxContainer.new()
+	q_row.add_child(_label("Chất lượng đồ họa"))
+	var q := OptionButton.new()
+	for t in Global.QUALITY_NAMES:
+		q.add_item(t)
+	q.select(clampi(Global.graphics_quality, 0, 2))
+	q.tooltip_text = "Thấp: mượt nhất cho máy yếu · Vừa: cân bằng · Cao: khử răng cưa, bóng mềm, nước gợn sóng, ánh sáng lấp lánh"
+	q.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	q.item_selected.connect(func(i):
+		Global.graphics_quality = i
+		_commit())
+	q_row.add_child(q)
+	v.add_child(q_row)
+
 	v.add_child(_check("Bóng đổ (tắt để mượt hơn trên máy yếu)", Global.shadows, func(on):
 		Global.shadows = on
 		_commit()))

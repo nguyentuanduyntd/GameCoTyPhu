@@ -189,13 +189,29 @@ func _setup_environment() -> void:
 	sky_mat = sm
 	sm.sky_top_color = Color("#4f8fd6")
 	sm.sky_horizon_color = Color("#cde6f5")
-	sm.ground_horizon_color = Color("#cde6f5")
-	sm.ground_bottom_color = Color("#2f5d34")
+	# mặt đất của bầu trời trùng màu nền cỏ ở xa (ground.gdshader far_color) → không thấy đường nối
+	sm.ground_horizon_color = Color(0.62, 0.74, 0.58)
+	sm.ground_bottom_color = Color(0.45, 0.6, 0.4)
+	sm.sun_angle_max = 20.0
 	sky.sky_material = sm
 	env.sky = sky
+	# ánh sáng môi trường: lấy từ trời, pha thêm tông ấm cho hợp màu giao diện gỗ/giấy
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.9
+	env.ambient_light_sky_contribution = 0.8
+	env.ambient_light_color = Color("#ffe8c8")
+	env.ambient_light_energy = 0.95
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.02
+	env.tonemap_white = 6.0
+	# glow nhẹ: công trình/danh thắng phát sáng, nắng lấp lánh trên nước
+	env.glow_intensity = 0.45
+	env.glow_strength = 0.9
+	env.glow_bloom = 0.02
+	env.glow_hdr_threshold = 0.95
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 1.06
+	env.adjustment_contrast = 1.03
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -203,7 +219,11 @@ func _setup_environment() -> void:
 	sun.rotation_degrees = Vector3(-58, -35, 0)
 	sun.light_energy = 1.15
 	sun.shadow_enabled = true
+	sun.shadow_blur = 1.4                     # bóng mềm
+	sun.shadow_bias = 0.04
+	sun.shadow_normal_bias = 1.2
 	sun.directional_shadow_max_distance = 60.0
+	sun.directional_shadow_blend_splits = true
 	add_child(sun)
 
 
@@ -262,7 +282,12 @@ func _focus_tile(t: int) -> void:
 
 
 func _apply_settings() -> void:
-	sun.shadow_enabled = Global.shadows
+	var q := Global.graphics_quality
+	sun.shadow_enabled = Global.shadows and q > 0
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if q >= 2 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	env.glow_enabled = q >= 1
+	env.adjustment_enabled = q >= 1
+	board.set_quality(q)
 	cam_ctl.auto_side = Global.cam_auto
 	season_fx.set_weather_enabled(Global.weather_fx)
 

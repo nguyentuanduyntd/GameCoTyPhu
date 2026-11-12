@@ -22,6 +22,9 @@ var weather_fx: bool = true
 var cam_auto: bool = true
 var buy_fx: int = 2      # hiệu ứng mua đất: 0 tắt, 1 giảm, 2 bật
 var cinematic: int = 2   # camera điện ảnh khi đi: 0 tắt, 1 chỉ lượt của bạn, 2 mọi người chơi
+## Chất lượng đồ hoạ: 0 Thấp, 1 Vừa, 2 Cao (mặc định Cao trên máy tính, Vừa trên điện thoại)
+var graphics_quality: int = 1 if OS.has_feature("mobile") else 2
+const QUALITY_NAMES := ["Thấp", "Vừa", "Cao"]
 
 
 func _ready() -> void:
@@ -33,6 +36,8 @@ func _ready() -> void:
 			buy_fx = clampi(int(arg.substr(8)), 0, 2)
 		if arg.begins_with("--cinematic="):
 			cinematic = clampi(int(arg.substr(12)), 0, 2)
+		if arg.begins_with("--quality="):   # kiểm thử: 0 Thấp, 1 Vừa, 2 Cao
+			graphics_quality = clampi(int(arg.substr(10)), 0, 2)
 		if arg.begins_with("--rounds="):   # kiểm thử: ván ngắn để xem màn kết thúc
 			max_rounds = maxi(1, int(arg.substr(9)))
 	apply_settings()
@@ -62,6 +67,7 @@ func load_settings() -> void:
 	cam_auto = cf.get_value("graphics", "cam_auto", cam_auto)
 	cinematic = cf.get_value("graphics", "cinematic", cinematic)
 	buy_fx = cf.get_value("graphics", "buy_fx", buy_fx)
+	graphics_quality = cf.get_value("graphics", "quality", graphics_quality)
 
 
 func save_settings() -> void:
@@ -79,13 +85,41 @@ func save_settings() -> void:
 	cf.set_value("graphics", "cam_auto", cam_auto)
 	cf.set_value("graphics", "cinematic", cinematic)
 	cf.set_value("graphics", "buy_fx", buy_fx)
+	cf.set_value("graphics", "quality", graphics_quality)
 	cf.save(SETTINGS_PATH)
 
 
 func apply_settings() -> void:
 	Audio.set_bus_volume("Music", music_volume)
 	Audio.set_bus_volume("SFX", sfx_volume)
+	apply_graphics()
 	settings_changed.emit()
+
+
+## Khử răng cưa, độ phân giải 3D, độ nét bóng đổ theo chất lượng (áp dụng cho cả sảnh và ván chơi).
+## Hiệu ứng riêng của cảnh (glow, gợn nước, nhiễu màu ô) do game.gd đọc `graphics_quality` để bật/tắt.
+## Ghi chú: SSAO/SSR không có ở renderer Mobile nên không dùng.
+func apply_graphics() -> void:
+	var vp := get_tree().root
+	match graphics_quality:
+		0:
+			vp.msaa_3d = Viewport.MSAA_DISABLED
+			vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
+			vp.scaling_3d_scale = 0.8
+			RenderingServer.directional_shadow_atlas_set_size(1024, true)
+			RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_HARD)
+		1:
+			vp.msaa_3d = Viewport.MSAA_2X
+			vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+			vp.scaling_3d_scale = 1.0
+			RenderingServer.directional_shadow_atlas_set_size(2048, true)
+			RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+		_:
+			vp.msaa_3d = Viewport.MSAA_4X
+			vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+			vp.scaling_3d_scale = 1.0
+			RenderingServer.directional_shadow_atlas_set_size(4096, true)
+			RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM)
 
 
 ## Chọn ngẫu nhiên nhân vật cho máy (không trùng nhau, không trùng người chơi).

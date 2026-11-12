@@ -31,6 +31,7 @@ scripts/ui/theme/ Theme gốc: bảng màu (data/ui/palette.tres), UiTheme, bộ
 scripts/ui/hud/   Thẻ nhân vật (avatar), thanh Vòng/Mùa/Quỹ, nhật ký
 scripts/ui/popup/ UiPopup (popup quyết định dùng chung), NotifyQueue (hàng đợi thông báo)
 scripts/game/pawn_motion.gd  Chuyển động quân cờ (nhảy parabol, squash/stretch, xếp chỗ)
+shaders/          tile (vát cạnh giả + nhiễu màu ô), water (biển gợn sóng), ground (nền cỏ)
 scripts/audio.gd  Quản lý âm thanh (autoload "Audio")
 assets/audio/     Âm thanh và nhạc nền (.wav) — do tools/gen_audio.py tổng hợp
 tools/            Script tạo âm thanh (Python + numpy)
@@ -119,6 +120,9 @@ Xem chuyển động quân cờ (4 quân chung ô, một quân nhảy đi rồi 
 ```bash
 godot --path . -- --motiondemo --speed=1 --shots=12 --every=0.45 --shot=screenshots
 ```
+
+Thử mức chất lượng đồ hoạ: thêm `--quality=0|1|2` (Thấp / Vừa / Cao); đo FPS thật thì thêm `--disable-vsync` trước `--path`.
+Kiểm tra nhanh bảng Cài đặt: `godot --path . --script res://tests/settings_smoke.gd`.
 
 Ván ngắn để xem màn kết thúc: thêm `--rounds=1`. Cho popup quyết định hiện lâu hơn khi autotest: `--clickdelay=4`.
 

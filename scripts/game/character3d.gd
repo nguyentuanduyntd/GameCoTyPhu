@@ -30,8 +30,8 @@ var walking := false
 var gait: Dictionary = DEFAULT_GAIT
 ## Nghiêng người theo chuyển động (PawnMotion đặt), cộng thêm vào dáng đi.
 var lean := 0.0
-## Độ cao mặt ô dưới chân (để bóng luôn nằm trên mặt bàn khi đang nhảy).
-var ground_y := 0.1
+## Độ cao mặt ô dưới chân (để bóng luôn nằm trên mặt bàn khi đang nhảy). NAN = đứng yên tại chỗ (sảnh).
+var ground_y := NAN
 ## Tốc độ hoạt cảnh phản ứng (theo tốc độ ván x1–x4).
 var anim_speed := 1.0
 var _walk_k := 0.0
@@ -130,8 +130,9 @@ func _update_shadow() -> void:
 	if _shadow == null:
 		return
 	var sy := maxf(scale.y, 0.001)
-	var h := maxf(0.0, position.y - ground_y)
-	_shadow.position.y = (ground_y - position.y) / sy + 0.012
+	var gy := position.y if is_nan(ground_y) else ground_y
+	var h := maxf(0.0, position.y - gy)
+	_shadow.position.y = (gy - position.y) / sy + 0.012
 	var k := clampf(h / 0.8, 0.0, 1.0)
 	_shadow.scale = Vector3.ONE * lerpf(1.0, 0.6, k)
 	_shadow_mat.albedo_color.a = lerpf(0.32, 0.12, k)

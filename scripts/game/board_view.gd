@@ -19,6 +19,11 @@ var info_labels: Array = []
 var highlight_nodes: Array = []
 var festival_marker: Node3D
 var center_ground: MeshInstance3D
+var ground: MeshInstance3D
+var _tile_mat: ShaderMaterial    # một material dùng chung cho mọi ô / khối gỗ (màu là tham số từng ô)
+var _water_mat: ShaderMaterial
+var _ground_mat: ShaderMaterial
+static var _label_font: Font
 var map: VietnamMap
 var season_label: Label3D
 var season_event_label: Label3D
@@ -43,6 +48,8 @@ var _t := 0.0
 
 func build(colors: Array) -> void:
 	player_colors = colors
+	_tile_mat = ShaderMaterial.new()
+	_tile_mat.shader = preload("res://shaders/tile.gdshader")
 	_build_base()
 	for i in BoardData.TILE_COUNT:
 		_build_tile(i)
@@ -126,18 +133,29 @@ func _build_base() -> void:
 	bm.size = Vector3(2 * H + 0.6, 0.5, 2 * H + 0.6)
 	base.mesh = bm
 	base.position.y = -0.25
-	base.material_override = _mat("#6d4c41")
+	_shaded(base, Color("#6d4c41"), Vector2(bm.size.x, bm.size.z) / 2.0, 0.14, 1.0)
 	add_child(base)
+	# Nền cỏ quanh bàn (tan vào chân trời ở xa)
+	ground = MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(170, 170)
+	ground.mesh = pm
+	ground.position.y = -0.5
+	_ground_mat = ShaderMaterial.new()
+	_ground_mat.shader = preload("res://shaders/ground.gdshader")
+	_ground_mat.set_shader_parameter("board_half", H + 0.3)
+	ground.material_override = _ground_mat
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ground)
 	center_ground = MeshInstance3D.new()
 	var cm := BoxMesh.new()
 	var inner := 2 * H - 2 * D - 0.1
 	cm.size = Vector3(inner, 0.08, inner)
 	center_ground.mesh = cm
 	center_ground.position.y = 0.04
-	var gm := StandardMaterial3D.new()
-	gm.albedo_color = Color("#4fa3d9")
-	gm.roughness = 0.95
-	center_ground.material_override = gm
+	_water_mat = ShaderMaterial.new()
+	_water_mat.shader = preload("res://shaders/water.gdshader")
+	center_ground.material_override = _water_mat
 	add_child(center_ground)
 
 
@@ -173,7 +191,7 @@ func _build_tile(i: int) -> void:
 		face_color = "#e3e7ea"
 	elif ty == BoardData.T.TAX or ty == BoardData.T.MARKET or ty == BoardData.T.LOTTERY:
 		face_color = "#f1e4ff"
-	face.material_override = _mat(face_color)
+	_shaded(face, Color(face_color), Vector2(fm.size.x, fm.size.z) / 2.0, 0.07 if not corner else 0.1)
 	root.add_child(face)
 
 	if ty == BoardData.T.PROVINCE:
@@ -182,7 +200,7 @@ func _build_tile(i: int) -> void:
 		bm.size = Vector3(size.x - 0.04, 0.06, 0.42)
 		band.mesh = bm
 		band.position = Vector3(0, 0.12, -D / 2 + 0.23)
-		band.material_override = _mat(BoardData.GROUPS[td["group"]]["color"])
+		_shaded(band, Color(BoardData.GROUPS[td["group"]]["color"]), Vector2(bm.size.x, bm.size.z) / 2.0, 0.035)
 		root.add_child(band)
 
 	# Tên ô
@@ -606,8 +624,46 @@ func _flat_label(text: String, font_size: int, width: float, px: float = 0.004) 
 	l.rotation.x = -PI / 2
 	l.modulate = Color("#212121")
 	l.outline_size = 0
-	l.alpha_cut = Label3D.ALPHA_CUT_DISCARD
+	# MSDF: chữ sắc nét ở mọi khoảng cách; opaque prepass: mép mịn mà vẫn ghi depth (không lỗi thứ tự vẽ)
+	l.font = label_font()
+	l.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS
+	l.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	return l
+
+
+## Font chữ trên bàn cờ: bản MSDF (signed distance field) của font giao diện → không răng cưa, không mờ khi ở xa.
+static func label_font() -> Font:
+	if _label_font:
+		return _label_font
+	var base: Font = ThemeDB.fallback_font
+	if ResourceLoader.exists("res://assets/fonts/BeVietnamPro-Bold.ttf"):
+		base = load("res://assets/fonts/BeVietnamPro-Bold.ttf")
+	if base is FontFile:
+		var f := (base as FontFile).duplicate() as FontFile
+		f.multichannel_signed_distance_field = true
+		f.msdf_pixel_range = 40   # >= 2 × viền chữ dày nhất (tiêu đề giữa bàn: 18)
+		f.msdf_size = 64
+		_label_font = f
+	else:
+		_label_font = base
+	return _label_font
+
+
+## Gán material ô dùng chung + tham số riêng (màu, nửa kích thước mặt trên, độ vát, vân gỗ).
+func _shaded(mi: MeshInstance3D, col: Color, half: Vector2, bevel: float, grain: float = 0.0) -> void:
+	mi.material_override = _tile_mat
+	mi.set_instance_shader_parameter("tint", col)
+	mi.set_instance_shader_parameter("half_size", half)
+	mi.set_instance_shader_parameter("bevel", bevel)
+	mi.set_instance_shader_parameter("grain", grain)
+
+
+## Chất lượng đồ hoạ: 0 Thấp (tắt nhiễu, nước phẳng), 1 Vừa, 2 Cao.
+func set_quality(q: int) -> void:
+	var d := 0.0 if q <= 0 else 1.0
+	for m in [_tile_mat, _water_mat, _ground_mat]:
+		if m:
+			(m as ShaderMaterial).set_shader_parameter("detail", d)
 
 
 func _mat(col: String, glow: bool = false) -> StandardMaterial3D:
