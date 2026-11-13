@@ -69,16 +69,24 @@ func _ready() -> void:
 
 
 ## Bản Web: địa chỉ server lấy từ link (…/?server=wss://…) nếu có — để chỉ cần gửi MỘT link;
-## không có thì trang mở từ máy nào kết nối server của chính máy đó (ws://<máy>:8910).
+## trang mở từ máy làm server qua http (cùng Wi-Fi) thì kết nối server của chính máy đó (ws://<máy>:8910);
+## trang công khai (https, VD GitHub Pages) mà không có ?server= thì để trống — người chơi phải dán
+## địa chỉ chủ phòng gửi (địa chỉ đường hầm đổi mỗi lần nên không giữ địa chỉ cũ).
 ## Kèm nhắc xoay ngang khi điện thoại đang cầm dọc.
+var web_server_from_link := false
+
+
 func _web_defaults() -> void:
 	var proto := str(JavaScriptBridge.eval("location.protocol", true))
 	var host := str(JavaScriptBridge.eval("location.hostname", true))
 	var from_link := str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('server') || ''", true)).strip_edges()
 	if from_link.begins_with("ws://") or from_link.begins_with("wss://"):
 		server_url = from_link
-	elif proto == "http:" and host != "" and server_url == "ws://localhost:8910":
+		web_server_from_link = true
+	elif proto == "http:" and host != "":
 		server_url = "ws://%s:%d" % [host, NetUtil.DEFAULT_PORT]
+	else:
+		server_url = ""
 	_rotate_hint = CanvasLayer.new()
 	_rotate_hint.layer = 120
 	var bg := ColorRect.new()

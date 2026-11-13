@@ -35,8 +35,9 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_CENTER)
 	offset_left = -300
 	offset_right = 300
-	offset_top = -230
-	offset_bottom = 230
+	# cao vừa nội dung (không chừa khoảng trống thừa), luôn ở giữa màn hình
+	offset_top = 0
+	offset_bottom = 0
 	grow_horizontal = Control.GROW_DIRECTION_BOTH
 	grow_vertical = Control.GROW_DIRECTION_BOTH
 	var v := VBoxContainer.new()
@@ -58,7 +59,10 @@ func _ready() -> void:
 			_host_here.button_pressed = false   # trình duyệt không làm server được
 			_host_here.visible = false
 		if OS.has_feature("web"):
-			v.add_child(_caption("Phòng được tạo trên server ở địa chỉ bên dưới (mặc định: máy đang phát trang web này).", true))
+			if Global.server_url == "":
+				v.add_child(_caption(_no_server_hint(), true))
+			else:
+				v.add_child(_caption("Phòng được tạo trên server ở địa chỉ bên dưới (lấy từ link bạn mở).", true))
 		else:
 			v.add_child(_caption("Chơi qua Internet: bỏ chọn và nhập địa chỉ server (wss://...trycloudflare.com).", true))
 	else:
@@ -113,7 +117,7 @@ func _ready() -> void:
 	srow.add_child(_caption("Địa chỉ server:"))
 	_server = LineEdit.new()
 	_server.text = Global.server_url
-	_server.placeholder_text = "ws://192.168.1.5:8910 hoặc wss://....trycloudflare.com"
+	_server.placeholder_text = "Dán link hoặc địa chỉ wss://… chủ phòng gửi" if OS.has_feature("web") else "ws://192.168.1.5:8910 hoặc wss://....trycloudflare.com"
 	_server.text_submitted.connect(func(_t): _go_pressed())
 	srow.add_child(_server)
 	srow.visible = mode == "join" or OS.has_feature("web")
@@ -174,6 +178,10 @@ func _search_lan() -> void:
 	_lan_status.visible = true
 	var found: Array
 	if OS.has_feature("web"):
+		if _server.text.strip_edges() == "":
+			_lan_status.text = _no_server_hint()
+			_searching = false
+			return
 		_lan_status.text = "Đang hỏi server danh sách phòng..."
 		found = await _search_server()
 	else:
@@ -210,7 +218,9 @@ func _search_lan() -> void:
 
 ## Bản Web: kết nối tới server ở ô địa chỉ và hỏi danh sách phòng đang chờ (thay cho tìm qua UDP).
 func _search_server() -> Array:
-	var url := _normalized(_server.text)
+	var url := _server_address()
+	if url == "":
+		return []
 	if not (Net.is_online() and Net.url == url):
 		Net.player_name = Global.player_name
 		Net.character = Global.character
@@ -252,16 +262,22 @@ func _go_pressed() -> void:
 				_say("Máy này đã có server đang chạy — dùng luôn server đó.")
 			_start("ws://127.0.0.1:%d" % NetUtil.DEFAULT_PORT, "")
 		else:
-			Global.server_url = _server.text.strip_edges()
+			var addr := _server_address()
+			if addr == "":
+				return
+			Global.server_url = addr
 			Global.save_settings()
-			_start(Global.server_url, "")
+			_start(addr, "")
 		return
 	if _code.text.strip_edges().length() != NetUtil.CODE_LEN:
 		_say("Mã phòng gồm %d ký tự." % NetUtil.CODE_LEN, true)
 		return
-	Global.server_url = _server.text.strip_edges()
+	var addr2 := _server_address()
+	if addr2 == "":
+		return
+	Global.server_url = addr2
 	Global.save_settings()
-	_start(Global.server_url, _code.text.strip_edges())
+	_start(addr2, _code.text.strip_edges())
 
 
 ## Kết nối tới `url`, rồi tạo phòng (code rỗng) hoặc vào phòng `code`.
@@ -289,12 +305,43 @@ func _normalized(u: String) -> String:
 	return u if (u.begins_with("ws://") or u.begins_with("wss://")) else "ws://" + u
 
 
+## Địa chỉ server từ ô nhập: nhận cả địa chỉ (ws:// / wss:// / IP:cổng) lẫn nguyên link chia sẻ
+## (…/?server=wss://…). Trả về "" và báo lỗi dễ hiểu nếu không dùng được.
+func _server_address() -> String:
+	var t := _server.text.strip_edges()
+	if t.contains("server="):
+		t = t.get_slice("server=", 1).get_slice("&", 0).uri_decode().strip_edges()
+		_server.text = t
+	if t == "":
+		# bản Web đã hiện hướng dẫn đầy đủ phía trên → chỉ nhắc ngắn, không lặp lại
+		_say("Chưa có địa chỉ server — xem hướng dẫn ở trên." if OS.has_feature("web") else _no_server_hint(), true)
+		return ""
+	if t.begins_with("http://") or t.begins_with("https://"):
+		_say("Đây là link trang web, chưa có địa chỉ server. Hãy mở hoặc dán đúng link chủ phòng gửi (có phần ?server=wss://…).", true)
+		return ""
+	var u := _normalized(t)
+	if _page_is_https() and u.begins_with("ws://") and not (u.contains("localhost") or u.contains("127.0.0.1")):
+		_say("Trang web này (https) chỉ kết nối được địa chỉ wss://… — hãy mở đúng link chủ phòng gửi.", true)
+		return ""
+	return u
+
+
+func _page_is_https() -> bool:
+	return OS.has_feature("web") and str(JavaScriptBridge.eval("location.protocol", true)) == "https:"
+
+
+func _no_server_hint() -> String:
+	if OS.has_feature("web"):
+		return "Bản Web không tự làm server được. Nhờ chủ phòng bật ChiaSeInternet.bat trên máy tính rồi gửi link — mở đúng link đó, hoặc dán link vào ô Địa chỉ server. Chơi một mình: bấm Huỷ rồi CHƠI VỚI MÁY."
+	return "Nhập địa chỉ server (VD ws://192.168.1.5:8910 hoặc wss://….trycloudflare.com)."
+
+
 func _process(delta: float) -> void:
 	if _busy and not Net.is_online():
 		_t += delta
 		if _t > CONNECT_TIMEOUT:
 			Net.close()
-			_fail("Không kết nối được. Kiểm tra địa chỉ, server đã bật chưa, và tường lửa Windows của máy server đã cho phép game chưa.")
+			_fail(_cannot_connect_hint())
 
 
 func _on_connected() -> void:
@@ -310,7 +357,13 @@ func _on_connected() -> void:
 
 func _on_disconnected() -> void:
 	if _busy:
-		_fail("Mất kết nối tới server.")
+		_fail(_cannot_connect_hint())
+
+
+func _cannot_connect_hint() -> String:
+	if OS.has_feature("web") and _page_is_https():
+		return "Không kết nối được tới server. Kiểm tra chủ phòng còn mở cửa sổ ChiaSeInternet, và bạn đang dùng link MỚI NHẤT họ gửi (mỗi lần bật lại, link đổi)."
+	return "Không kết nối được tới server. Kiểm tra địa chỉ, server đã bật chưa, và tường lửa Windows của máy server đã cho phép game chưa."
 
 
 func _on_error(text: String) -> void:
