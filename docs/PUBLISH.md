@@ -38,6 +38,34 @@ Gửi bạn bè bản Windows: nén thư mục `build\windows` thành .zip. Wind
 
 - Yêu cầu: Android 64-bit hỗ trợ Vulkan (đa số máy từ khoảng 2018 trở lại đây). Game tự chọn chất lượng đồ hoạ *Vừa* trên điện thoại; máy yếu thì chỉnh *Thấp* trong Cài đặt.
 
+## Cập nhật lên điện thoại của bạn mà không phải gửi file
+
+Ghép điện thoại với máy tính **một lần**, sau đó mỗi lần sửa game chỉ cần chạy một lệnh: script xuất APK, **cài đè** lên điện thoại (giữ nguyên dữ liệu và cài đặt trong game) rồi mở game luôn.
+
+**Cách 1 — qua Wi-Fi (Android 11 trở lên, không cần cáp):**
+
+1. Bật *Tuỳ chọn nhà phát triển*: *Cài đặt → Giới thiệu điện thoại* → chạm 7 lần vào *Số hiệu bản tạo* (Build number).
+2. *Cài đặt → Hệ thống → Tuỳ chọn nhà phát triển* → bật **Gỡ lỗi không dây** (điện thoại và máy tính cùng Wi-Fi).
+3. **Ghép lần đầu**: trong *Gỡ lỗi không dây* chọn *Ghép nối thiết bị bằng mã ghép nối* → điện thoại hiện `IP:cổng` và mã 6 số. Trên máy tính chạy lệnh dưới (thay đúng IP:cổng) rồi tự gõ mã 6 số khi được hỏi:
+
+   ```bash
+   %LOCALAPPDATA%\Android\Sdk\platform-tools\adb pair 192.168.1.23:37000
+   ```
+
+4. **Mỗi lần cập nhật**: xem dòng *Địa chỉ IP và cổng* ở màn hình *Gỡ lỗi không dây* (cổng này **khác** cổng ghép, và đổi mỗi lần bật lại gỡ lỗi không dây), rồi chạy:
+
+   ```bash
+   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -AndroidOnly -Install -Phone 192.168.1.23:41235
+   ```
+
+**Cách 2 — cắm cáp USB:** bật *Gỡ lỗi USB* trong *Tuỳ chọn nhà phát triển*, cắm cáp, chấp nhận hộp *Cho phép gỡ lỗi USB?* trên điện thoại, rồi chạy (không cần `-Phone`):
+
+```bash
+powershell -ExecutionPolicy Bypass -File tools\build.ps1 -AndroidOnly -Install
+```
+
+Bạn bè vẫn cần file APK mới khi game đổi, nhất là khi chơi online (các máy phải cùng phiên bản giao thức).
+
 ## Đã kiểm tra
 
 - Bản Windows: mở sảnh, chơi với máy, bật server bằng chính file .exe, hai bản .exe chơi online trọn ván (mã trạng thái khớp).

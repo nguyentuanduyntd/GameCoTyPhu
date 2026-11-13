@@ -5,13 +5,20 @@
 #   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -AndroidOnly
 #   thêm -Godot "<đường dẫn Godot ..._console.exe>" nếu Godot ở chỗ khác
 #
+# Cài thẳng lên điện thoại (không phải gửi file): thêm -Install
+#   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -AndroidOnly -Install
+#   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -AndroidOnly -Install -Phone 192.168.1.23:41235
+# Điện thoại cắm cáp USB (bật Gỡ lỗi USB) hoặc đã ghép "Gỡ lỗi không dây" — xem docs/PUBLISH.md.
+#
 # Android ký bằng khoá debug chuẩn (đủ để cài trực tiếp / gửi bạn bè). Muốn dùng khoá riêng của bạn
 # (bắt buộc nếu đưa lên Google Play) thì đặt trước 3 biến môi trường:
 #   GODOT_ANDROID_KEYSTORE_RELEASE_PATH, GODOT_ANDROID_KEYSTORE_RELEASE_USER, GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
 param(
 	[string]$Godot = "D:\Dowload\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe",
 	[switch]$WindowsOnly,
-	[switch]$AndroidOnly
+	[switch]$AndroidOnly,
+	[switch]$Install,
+	[string]$Phone = ""
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
@@ -72,5 +79,27 @@ if (-not $WindowsOnly) {
 		$env:GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD = "android"
 	}
 	Export-Preset "Android" "build/android/TyPhuDatViet.apk"
+	if ($Install) {
+		# Cài đè lên điện thoại (giữ nguyên dữ liệu, cài đặt trong game) rồi mở game luôn
+		$adb = Join-Path $env:LOCALAPPDATA "Android\Sdk\platform-tools\adb.exe"
+		if (-not (Test-Path $adb)) { throw "Không thấy adb ở $adb (cài Android SDK platform-tools)." }
+		# bật adb server tách riêng (nếu để adb tự bật trong lệnh dưới, nó giữ luồng xuất và script bị treo)
+		Start-Process -FilePath $adb -ArgumentList "start-server" -WindowStyle Hidden
+		Start-Sleep -Seconds 3
+		if ($Phone -ne "") {
+			Write-Host "== Kết nối điện thoại qua Wi-Fi: $Phone"
+			& $adb connect $Phone
+		}
+		$devices = (& $adb devices) | Select-String -Pattern "\tdevice$"
+		if ($devices.Count -eq 0) {
+			throw "Không thấy điện thoại. Cắm cáp USB (bật Gỡ lỗi USB) hoặc ghép Gỡ lỗi không dây rồi thêm -Phone <IP:cổng> (xem docs/PUBLISH.md)."
+		}
+		$serial = ($devices[0].Line -split "\t")[0]
+		Write-Host "== Cài lên điện thoại $serial"
+		& $adb -s $serial install -r "build\android\TyPhuDatViet.apk"
+		if ($LASTEXITCODE -ne 0) { throw "Cài APK thất bại (xem lỗi ở trên)." }
+		& $adb -s $serial shell monkey -p com.typhudatviet.game -c android.intent.category.LAUNCHER 1 | Out-Null
+		Write-Host "   đã cài và mở game trên điện thoại."
+	}
 }
 Write-Host "Hoàn tất. Kết quả ở thư mục build\"
