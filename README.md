@@ -140,7 +140,7 @@ Ván ngắn để xem màn kết thúc: thêm `--rounds=1`. Cho popup quyết đ
 
 ## Xuất bản (Windows / Android)
 
-`powershell -ExecutionPolicy Bypass -File toolsuild.ps1` → `build\windows\TyPhuDatViet.exe` (một file, gửi bạn bè chạy luôn, kèm `ChayServer.bat` để bật server) và `buildndroid\TyPhuDatViet.apk`. Hướng dẫn đầy đủ: [docs/PUBLISH.md](docs/PUBLISH.md).
+`powershell -ExecutionPolicy Bypass -File tools/build.ps1` → `build/windows/TyPhuDatViet.exe` (một file, gửi bạn bè chạy luôn, kèm `ChayServer.bat` để bật server) và `build/android/TyPhuDatViet.apk`. Hướng dẫn đầy đủ: [docs/PUBLISH.md](docs/PUBLISH.md).
 
 ## Chơi online với bạn bè
 
