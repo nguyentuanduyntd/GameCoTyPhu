@@ -66,6 +66,19 @@ func _ready() -> void:
 	ThemeDB.fallback_font_size = t.default_font_size
 
 
+## Nút Back (Android): trong ván thì về sảnh (online thì rời phòng đúng cách), ở sảnh thì thoát game.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_WM_GO_BACK_REQUEST:
+		return
+	var scene := get_tree().current_scene
+	if scene == null or scene.scene_file_path.ends_with("lobby.tscn"):
+		get_tree().quit()
+	elif scene.has_method("_leave_to_lobby"):
+		scene._leave_to_lobby()
+	else:
+		get_tree().change_scene_to_file("res://scenes/lobby.tscn")
+
+
 func load_settings() -> void:
 	var cf := ConfigFile.new()
 	if cf.load(SETTINGS_PATH) != OK:

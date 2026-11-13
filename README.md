@@ -138,6 +138,10 @@ Ván ngắn để xem màn kết thúc: thêm `--rounds=1`. Cho popup quyết đ
 | F5 | Lần lượt các phản ứng: lucky, jolt, cheer, slump, sigh, sad |
 | F6 | Đổi kích thước cửa sổ 1280×720 ↔ 1920×1080 |
 
+## Xuất bản (Windows / Android)
+
+`powershell -ExecutionPolicy Bypass -File toolsuild.ps1` → `build\windows\TyPhuDatViet.exe` (một file, gửi bạn bè chạy luôn, kèm `ChayServer.bat` để bật server) và `buildndroid\TyPhuDatViet.apk`. Hướng dẫn đầy đủ: [docs/PUBLISH.md](docs/PUBLISH.md).
+
 ## Chơi online với bạn bè
 
 Bật server ngay trên máy bạn (miễn phí): `godot --headless --path . -- --server`, rồi ở sảnh bấm **Tạo phòng** để lấy mã 6 ký tự gửi bạn bè; họ bấm **Nhập mã phòng**. Chơi qua Internet bằng Cloudflare Tunnel miễn phí. Hướng dẫn đầy đủ: [docs/ONLINE.md](docs/ONLINE.md).
@@ -151,4 +155,4 @@ Bật server ngay trên máy bạn (miễn phí): `godot --headless --path . -- 
 - [x] Thẻ Khí Vận / Cơ Hội, đấu giá, 4 loại công trình, camera điện ảnh, đánh bóng giao diện và chuyển động
 - [~] M4 — Online: **tạo phòng bằng mã ✓** (server tự chạy, rớt mạng vào lại, hết giờ bỏ lượt); ghép trận ngẫu nhiên — đợt 2
 - [ ] M5 — Tài khoản, leo hạng
-- [ ] M6 — Tối ưu điện thoại, xuất bản Windows + Android
+- [~] M6 — Xuất bản Windows (.exe) + Android (.apk) ✓, điều khiển cảm ứng ✓; còn: thử trên điện thoại thật, tối ưu hiệu năng máy yếu

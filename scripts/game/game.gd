@@ -24,6 +24,8 @@ var _applied := 0            # số nước đã áp dụng
 var _inbox: Array = []       # nước đi nhận được nhưng chưa áp (đang bận diễn)
 var _stepping := false       # đang trong bước chuẩn bị quyết định (mở bộ bài...) → chưa áp nước mới
 var _room_code := ""
+var _touches := {}           # ngón tay đang chạm (điện thoại): chụm 2 ngón để phóng to/thu nhỏ
+var _pinch_d := 0.0
 var _reconnect_t := -1.0
 var _picking: Array = []
 var cam_ctl: CameraController
@@ -261,6 +263,28 @@ func _setup_camera() -> void:
 func _unhandled_input(ev: InputEvent) -> void:
 	if ev is InputEventKey and ev.pressed and not ev.echo and OS.is_debug_build():
 		_debug_key((ev as InputEventKey).keycode)
+	# Cảm ứng: 2 ngón chụm/mở = thu nhỏ/phóng to (1 ngón kéo = xoay, qua chuột giả lập)
+	if ev is InputEventScreenTouch:
+		var st := ev as InputEventScreenTouch
+		if st.pressed:
+			_touches[st.index] = st.position
+		else:
+			_touches.erase(st.index)
+		_pinch_d = _touch_spread()
+		if _touches.size() >= 2:
+			_dragging = true   # đang chụm thì thả tay không tính là bấm chọn ô
+		return
+	if ev is InputEventScreenDrag:
+		var sd := ev as InputEventScreenDrag
+		_touches[sd.index] = sd.position
+		if _touches.size() >= 2:
+			var d := _touch_spread()
+			if _pinch_d > 10.0 and d > 10.0:
+				cam_ctl.zoom(clampf(_pinch_d / d, 0.9, 1.1))
+			_pinch_d = d
+		return
+	if ev is InputEventMouseMotion and _touches.size() >= 2:
+		return   # chuột giả lập từ ngón thứ nhất: không xoay bàn khi đang chụm
 	if ev is InputEventMouseButton:
 		var mb := ev as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -282,6 +306,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 				cam_ctl.orbit(mm.relative.x * 0.006)
 	elif ev is InputEventMagnifyGesture:
 		cam_ctl.zoom(1.0 / (ev as InputEventMagnifyGesture).factor)
+
+
+func _touch_spread() -> float:
+	if _touches.size() < 2:
+		return 0.0
+	var pts: Array = _touches.values()
+	return (pts[0] as Vector2).distance_to(pts[1])
 
 
 func _try_pick(screen: Vector2) -> void:

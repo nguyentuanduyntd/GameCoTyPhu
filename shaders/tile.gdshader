@@ -1,16 +1,17 @@
 // Mặt ô bàn cờ / khối gỗ: vát cạnh giả (pháp tuyến nghiêng + viền sáng ở mép mặt trên),
 // nhiễu màu nhẹ theo toạ độ thế giới (không lặp giữa các ô), chuyển màu nhẹ theo chiều sâu ô,
-// thành ô tối hơn mặt ô, vân gỗ tuỳ chọn. Một material dùng chung, màu/kích thước là tham số từng ô.
+// thành ô tối hơn mặt ô, vân gỗ tuỳ chọn. Mỗi kiểu ô (màu, kích thước) một material — dùng uniform
+// thường (không dùng instance uniform) để chạy được cả renderer OpenGL (máy không có Vulkan).
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
 
-instance uniform vec4 tint : source_color = vec4(1.0);
+uniform vec4 tint : source_color = vec4(1.0);
 // nửa kích thước mặt trên (x, z) của khối, đơn vị mét
-instance uniform vec2 half_size = vec2(0.58, 0.98);
+uniform vec2 half_size = vec2(0.58, 0.98);
 // độ rộng vùng vát cạnh
-instance uniform float bevel = 0.07;
+uniform float bevel = 0.07;
 // 0 = không vân gỗ, 1 = vân gỗ rõ
-instance uniform float grain = 0.0;
+uniform float grain = 0.0;
 // 0 = tắt nhiễu/chuyển màu (chất lượng Thấp), 1 = bật
 uniform float detail = 1.0;
 

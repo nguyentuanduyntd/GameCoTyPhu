@@ -1,0 +1,76 @@
+﻿# Xuất bản Tỷ Phú Đất Việt: Windows (.exe) và Android (.apk) vào thư mục build/
+#
+#   powershell -ExecutionPolicy Bypass -File tools\build.ps1                 # cả hai
+#   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -WindowsOnly
+#   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -AndroidOnly
+#   thêm -Godot "<đường dẫn Godot ..._console.exe>" nếu Godot ở chỗ khác
+#
+# Android ký bằng khoá debug chuẩn (đủ để cài trực tiếp / gửi bạn bè). Muốn dùng khoá riêng của bạn
+# (bắt buộc nếu đưa lên Google Play) thì đặt trước 3 biến môi trường:
+#   GODOT_ANDROID_KEYSTORE_RELEASE_PATH, GODOT_ANDROID_KEYSTORE_RELEASE_USER, GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD
+param(
+	[string]$Godot = "D:\Dowload\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe",
+	[switch]$WindowsOnly,
+	[switch]$AndroidOnly
+)
+$ErrorActionPreference = "Stop"
+$root = Split-Path $PSScriptRoot -Parent
+Set-Location $root
+if (-not (Test-Path $Godot)) { throw "Không thấy Godot ở: $Godot (dùng tham số -Godot)" }
+
+function Export-Preset([string]$preset, [string]$out) {
+	Write-Host "== Xuất $preset -> $out"
+	& $Godot --headless --path . --export-release $preset $out
+	if (-not (Test-Path $out)) { throw "Xuất $preset thất bại (xem lỗi ở trên)." }
+	$mb = [math]::Round((Get-Item $out).Length / 1MB, 1)
+	Write-Host "   xong: $out ($mb MB)"
+}
+
+if (-not $AndroidOnly) {
+	New-Item -ItemType Directory -Force "build\windows" | Out-Null
+	Export-Preset "Windows Desktop" "build/windows/TyPhuDatViet.exe"
+	# Tệp bật server ngay từ bản đã xuất (không cần cài Godot)
+	$bat = @"
+@echo off
+chcp 65001 >nul
+title Server Ty Phu Dat Viet
+echo Dang bat server Ty Phu Dat Viet (cong 8910). Dong cua so nay de tat server.
+echo Choi qua Internet: mo them cua so chay  cloudflared tunnel --url http://localhost:8910
+"%~dp0TyPhuDatViet.console.exe" --headless -- --server %*
+pause
+"@
+	Set-Content -Path "build\windows\ChayServer.bat" -Value $bat -Encoding ASCII
+	Copy-Item "docs\ONLINE.md" "build\windows\HuongDanOnline.md" -Force
+}
+
+if (-not $WindowsOnly) {
+	New-Item -ItemType Directory -Force "build\android" | Out-Null
+	if (-not $env:JAVA_HOME) {
+		$jbr = "C:\Program Files\Android\Android Studio\jbr"
+		if (Test-Path $jbr) { $env:JAVA_HOME = $jbr } else { throw "Chưa có Java: cài Android Studio hoặc đặt JAVA_HOME." }
+	}
+	# Godot 4.7 cần "Java SDK Path" trong Editor Settings (không tự lấy JAVA_HOME): điền nếu đang trống
+	$es = Join-Path $env:APPDATA "Godot\editor_settings-4.7.tres"
+	if (Test-Path $es) {
+		$txt = [System.IO.File]::ReadAllText($es)
+		if ($txt -match 'export/android/java_sdk_path = ""') {
+			$jp = $env:JAVA_HOME.Replace('\', '/')
+			$txt = $txt -replace 'export/android/java_sdk_path = ""', ('export/android/java_sdk_path = "' + $jp + '"')
+			[System.IO.File]::WriteAllText($es, $txt, (New-Object System.Text.UTF8Encoding($false)))
+			Write-Host "   Đã đặt Java SDK Path trong Editor Settings: $jp"
+		}
+	}
+	if (-not $env:GODOT_ANDROID_KEYSTORE_RELEASE_PATH) {
+		# khoá debug chuẩn của Android (mật khẩu công khai "android"), Godot cũng tự tạo khoá này
+		$ks = Join-Path $env:APPDATA "Godot\keystores\debug.keystore"
+		if (-not (Test-Path $ks)) {
+			New-Item -ItemType Directory -Force (Split-Path $ks) | Out-Null
+			& "$env:JAVA_HOME\bin\keytool.exe" -genkeypair -keystore $ks -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+		}
+		$env:GODOT_ANDROID_KEYSTORE_RELEASE_PATH = $ks
+		$env:GODOT_ANDROID_KEYSTORE_RELEASE_USER = "androiddebugkey"
+		$env:GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD = "android"
+	}
+	Export-Preset "Android" "build/android/TyPhuDatViet.apk"
+}
+Write-Host "Hoàn tất. Kết quả ở thư mục build\"

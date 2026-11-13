@@ -20,7 +20,8 @@ var highlight_nodes: Array = []
 var festival_marker: Node3D
 var center_ground: MeshInstance3D
 var ground: MeshInstance3D
-var _tile_mat: ShaderMaterial    # một material dùng chung cho mọi ô / khối gỗ (màu là tham số từng ô)
+var _tile_mats := {}             # material ô theo (màu, kích thước, vát, vân gỗ) — dùng lại cho các ô giống nhau
+var _tile_detail := 1.0
 var _water_mat: ShaderMaterial
 var _ground_mat: ShaderMaterial
 static var _label_font: Font
@@ -48,8 +49,6 @@ var _t := 0.0
 
 func build(colors: Array) -> void:
 	player_colors = colors
-	_tile_mat = ShaderMaterial.new()
-	_tile_mat.shader = preload("res://shaders/tile.gdshader")
 	_build_base()
 	for i in BoardData.TILE_COUNT:
 		_build_tile(i)
@@ -651,17 +650,24 @@ static func label_font() -> Font:
 
 ## Gán material ô dùng chung + tham số riêng (màu, nửa kích thước mặt trên, độ vát, vân gỗ).
 func _shaded(mi: MeshInstance3D, col: Color, half: Vector2, bevel: float, grain: float = 0.0) -> void:
-	mi.material_override = _tile_mat
-	mi.set_instance_shader_parameter("tint", col)
-	mi.set_instance_shader_parameter("half_size", half)
-	mi.set_instance_shader_parameter("bevel", bevel)
-	mi.set_instance_shader_parameter("grain", grain)
+	var key := "%s|%.3f|%.3f|%.3f|%.2f" % [col.to_html(), half.x, half.y, bevel, grain]
+	if not _tile_mats.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = preload("res://shaders/tile.gdshader")
+		m.set_shader_parameter("tint", col)
+		m.set_shader_parameter("half_size", half)
+		m.set_shader_parameter("bevel", bevel)
+		m.set_shader_parameter("grain", grain)
+		m.set_shader_parameter("detail", _tile_detail)
+		_tile_mats[key] = m
+	mi.material_override = _tile_mats[key]
 
 
 ## Chất lượng đồ hoạ: 0 Thấp (tắt nhiễu, nước phẳng), 1 Vừa, 2 Cao.
 func set_quality(q: int) -> void:
 	var d := 0.0 if q <= 0 else 1.0
-	for m in [_tile_mat, _water_mat, _ground_mat]:
+	_tile_detail = d
+	for m in _tile_mats.values() + [_water_mat, _ground_mat]:
 		if m:
 			(m as ShaderMaterial).set_shader_parameter("detail", d)
 
