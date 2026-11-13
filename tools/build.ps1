@@ -68,6 +68,10 @@ pause
 "@
 	Set-Content -Path "build\windows\ChayServer.bat" -Value $bat -Encoding ASCII
 	Copy-Item "docs\ONLINE.md" "build\windows\HuongDanOnline.md" -Force
+	# Chia sẻ qua Internet (người ở xa, iPhone): ChiaSeInternet.bat -> bật server + đường hầm Cloudflare, in ra một link
+	Copy-Item "tools\chia_se_internet.ps1" "build\windows\ChiaSeInternet.ps1" -Force
+	Set-Content -Path "build\windows\ChiaSeInternet.bat" -Encoding ASCII -Value "@echo off`r`nchcp 65001 >nul`r`ntitle Chia se Ty Phu Dat Viet qua Internet`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0ChiaSeInternet.ps1`"`r`npause"
+	if (Test-Path "build\tools\cloudflared.exe") { Copy-Item "build\tools\cloudflared.exe" "build\windows\cloudflared.exe" -Force }
 }
 
 if ($doAndroid) {

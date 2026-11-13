@@ -68,12 +68,16 @@ func _ready() -> void:
 	ThemeDB.fallback_font_size = t.default_font_size
 
 
-## Bản Web: trang được mở từ máy nào thì mặc định kết nối server của chính máy đó (ws://<máy>:8910),
-## và nhắc xoay ngang khi điện thoại đang cầm dọc.
+## Bản Web: địa chỉ server lấy từ link (…/?server=wss://…) nếu có — để chỉ cần gửi MỘT link;
+## không có thì trang mở từ máy nào kết nối server của chính máy đó (ws://<máy>:8910).
+## Kèm nhắc xoay ngang khi điện thoại đang cầm dọc.
 func _web_defaults() -> void:
 	var proto := str(JavaScriptBridge.eval("location.protocol", true))
 	var host := str(JavaScriptBridge.eval("location.hostname", true))
-	if proto == "http:" and host != "" and server_url == "ws://localhost:8910":
+	var from_link := str(JavaScriptBridge.eval("new URLSearchParams(location.search).get('server') || ''", true)).strip_edges()
+	if from_link.begins_with("ws://") or from_link.begins_with("wss://"):
+		server_url = from_link
+	elif proto == "http:" and host != "" and server_url == "ws://localhost:8910":
 		server_url = "ws://%s:%d" % [host, NetUtil.DEFAULT_PORT]
 	_rotate_hint = CanvasLayer.new()
 	_rotate_hint.layer = 120

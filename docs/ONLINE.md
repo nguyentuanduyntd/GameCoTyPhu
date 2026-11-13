@@ -42,7 +42,19 @@ Mặc định cổng **8910** (thêm `--port=9000` để đổi). Nhấn `Ctrl+C
 | Cùng mạng Wi-Fi / LAN | thường không cần (tự tìm); nhập tay: `ws://<IP máy server>:8910` |
 | Qua Internet | dùng tunnel miễn phí bên dưới |
 
-### Qua Internet bằng Cloudflare Tunnel (miễn phí, không cần tài khoản)
+### Qua Internet — cách nhanh: `ChiaSeInternet.bat` (người ở xa, kể cả iPhone)
+
+Trong thư mục bản Windows (`build\windows`) bấm đúp **`ChiaSeInternet.bat`**. Nó tự bật server, mở 2 đường hầm Cloudflare miễn phí (server game + bản Web) và in ra **một link** dạng:
+
+```
+https://xxxx.trycloudflare.com/?server=wss://yyyy.trycloudflare.com
+```
+
+Link được chép sẵn vào clipboard — dán gửi qua Zalo/Messenger. Người nhận (iPhone: Safari; Android/máy tính: trình duyệt) mở link, chờ tải lần đầu (~40 MB, khoảng nửa phút), bấm **Nhập mã phòng** → chạm vào phòng. Người dùng bản cài (.exe/.apk) thì nhập địa chỉ `wss://yyyy…` (cửa sổ cũng in ra) vào ô *Địa chỉ server*.
+
+Bạn (chủ) tạo phòng trên máy này như bình thường. Link chỉ chạy khi cửa sổ `ChiaSeInternet` còn mở; mỗi lần bật lại link sẽ khác. Cần `cloudflared.exe` cùng thư mục (script xuất bản tự chép nếu có `build\tools\cloudflared.exe`). Có link bản Web cố định (ví dụ GitHub Pages) thì ghi vào tệp `web_url.txt` cạnh script — link gửi đi sẽ dùng địa chỉ đó.
+
+### Qua Internet bằng Cloudflare Tunnel — làm tay
 
 1. Tải `cloudflared` (bản Windows) từ trang chính thức của Cloudflare.
 2. Khi server game đang chạy, mở thêm một terminal:
