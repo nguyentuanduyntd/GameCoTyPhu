@@ -107,7 +107,7 @@ func _build() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_END
 	row.add_theme_constant_override("separation", 6)
 	right.add_child(row)
-	speed_btn = _icon_button("speed", "x1", "Tốc độ ván (x1 → x2 → x3 → x4)", _on_speed)
+	speed_btn = _icon_button("speed", "x1", "Tốc độ ván (x1 » x2 » x3 » x4)", _on_speed)
 	row.add_child(speed_btn)
 	cam_btn = _icon_button("camera", "Điện ảnh", "Góc nhìn: Điện ảnh (bám quân cờ) / Toàn cảnh", func():
 		var on := cam_btn.text == "Toàn cảnh"
@@ -347,9 +347,9 @@ func show_decision(pend: Dictionary) -> void:
 			decision_desc.text = "Đặc sản của bạn — Bắc: %d, Trung: %d, Nam: %d." % [sc[0], sc[1], sc[2]]
 			var opts: Array = pend["options"]
 			if opts.has("exchange_rare"):
-				_add_btn("Đổi 3 miền → thẻ hiếm", {"action": "exchange_rare"}, true)
+				_add_btn("Đổi 3 miền » thẻ hiếm", {"action": "exchange_rare"}, true)
 			if opts.has("exchange_common"):
-				_add_btn("Đổi 3 cùng miền → thẻ", {"action": "exchange_common"}, true)
+				_add_btn("Đổi 3 cùng miền » thẻ", {"action": "exchange_common"}, true)
 			if opts.has("buy_specialty"):
 				_add_btn("Mua 1 đặc sản (%s)" % BoardData.money(GameEngine.SPECIALTY_PRICE), {"action": "buy_specialty"})
 			_add_btn("Rời chợ", {"action": "pass"})
@@ -433,9 +433,9 @@ func show_roll(p: Dictionary) -> void:
 			_open_panel("Giải Tỏa")
 			_show_giai_toa()))
 	if engine.can_exchange(p["id"], "rare"):
-		roll_extras.add_child(_small_btn("Đổi đặc sản 3 miền → thẻ hiếm", func(): _emit({"action": "exchange", "kind": "rare"})))
+		roll_extras.add_child(_small_btn("Đổi đặc sản 3 miền » thẻ hiếm", func(): _emit({"action": "exchange", "kind": "rare"})))
 	if engine.can_exchange(p["id"], "common"):
-		roll_extras.add_child(_small_btn("Đổi 3 đặc sản cùng miền → thẻ", func(): _emit({"action": "exchange", "kind": "common"})))
+		roll_extras.add_child(_small_btn("Đổi 3 đặc sản cùng miền » thẻ", func(): _emit({"action": "exchange", "kind": "common"})))
 	_pop_roll_area()
 
 
@@ -527,7 +527,7 @@ func _show_golden() -> void:
 	decision_desc.text = "Chọn tổng điểm muốn tung:"
 	for total in range(2, 13):
 		var dest := (int(engine.players[human_id]["pos"]) + total) % BoardData.TILE_COUNT
-		_add_btn("%d → %s" % [total, BoardData.plain_name(dest)], {"action": "golden", "total": total})
+		_add_btn("%d » %s" % [total, BoardData.plain_name(dest)], {"action": "golden", "total": total})
 
 
 func _show_giai_toa() -> void:

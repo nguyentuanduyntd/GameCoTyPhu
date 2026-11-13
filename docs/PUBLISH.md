@@ -22,8 +22,9 @@ Kết quả nằm trong `build\` (không đưa lên Git):
 | `build\windows\ChayServer.bat` | Bấm đúp để bật server online (cổng 8910) |
 | `build\windows\HuongDanOnline.md` | Hướng dẫn chơi online |
 | `build\android\TyPhuDatViet.apk` | Game Android (máy 64-bit ARM và x86_64) |
+| `build\web\` (index.html, index.wasm...) | Bản Web — chơi bằng trình duyệt, kể cả Safari trên iPhone; cũng được chép vào `build\windows\web` để server phát ở cổng 8912 |
 
-Chỉ xuất một nền tảng: thêm `-WindowsOnly` hoặc `-AndroidOnly`. Godot ở chỗ khác: thêm `-Godot "<đường dẫn ..._console.exe>"`.
+Chỉ xuất một nền tảng: thêm `-WindowsOnly`, `-AndroidOnly` hoặc `-WebOnly`. Godot ở chỗ khác: thêm `-Godot "<đường dẫn ..._console.exe>"`.
 
 Gửi bạn bè bản Windows: nén thư mục `build\windows` thành .zip. Windows có thể hiện cảnh báo SmartScreen vì file chưa được ký số (ký số tốn phí) → bấm *More info → Run anyway*.
 

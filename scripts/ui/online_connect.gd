@@ -54,13 +54,19 @@ func _ready() -> void:
 		_host_here.button_pressed = true
 		_host_here.toggled.connect(func(on): _server_row.visible = not on)
 		v.add_child(_host_here)
-		v.add_child(_caption("Chơi qua Internet: bỏ chọn và nhập địa chỉ server (wss://...trycloudflare.com).", true))
+		if OS.has_feature("web"):
+			_host_here.button_pressed = false   # trình duyệt không làm server được
+			_host_here.visible = false
+		if OS.has_feature("web"):
+			v.add_child(_caption("Phòng được tạo trên server ở địa chỉ bên dưới (mặc định: máy đang phát trang web này).", true))
+		else:
+			v.add_child(_caption("Chơi qua Internet: bỏ chọn và nhập địa chỉ server (wss://...trycloudflare.com).", true))
 	else:
 		var head := HBoxContainer.new()
 		head.add_theme_constant_override("separation", 8)
 		v.add_child(head)
 		var lt := Label.new()
-		lt.text = "Phòng trong cùng Wi-Fi"
+		lt.text = "Phòng trên server" if OS.has_feature("web") else "Phòng trong cùng Wi-Fi"
 		lt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		head.add_child(lt)
 		var again := Button.new()
@@ -110,7 +116,7 @@ func _ready() -> void:
 	_server.placeholder_text = "ws://192.168.1.5:8910 hoặc wss://....trycloudflare.com"
 	_server.text_submitted.connect(func(_t): _go_pressed())
 	srow.add_child(_server)
-	srow.visible = mode == "join"
+	srow.visible = mode == "join" or OS.has_feature("web")
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -166,7 +172,12 @@ func _search_lan() -> void:
 			c.queue_free()
 	_lan_status.text = "Đang tìm phòng trong Wi-Fi..."
 	_lan_status.visible = true
-	var found: Array = await LanDiscovery.search(get_tree(), 1.6)
+	var found: Array
+	if OS.has_feature("web"):
+		_lan_status.text = "Đang hỏi server danh sách phòng..."
+		found = await _search_server()
+	else:
+		found = await LanDiscovery.search(get_tree(), 1.6)
 	_searching = false
 	if not is_inside_tree():
 		return
@@ -179,7 +190,7 @@ func _search_lan() -> void:
 			b.tooltip_text = "Server: %s (%s)" % [srv["name"], srv["ip"]]
 			b.custom_minimum_size = Vector2(0, 52)
 			b.theme_type_variation = "AccentButton"
-			var url := "ws://%s:%d" % [srv["ip"], int(srv["port"])]
+			var url: String = srv["url"] if srv.has("url") else "ws://%s:%d" % [srv["ip"], int(srv["port"])]
 			var code: String = r["code"]
 			b.pressed.connect(func():
 				Audio.play("click")
@@ -187,10 +198,46 @@ func _search_lan() -> void:
 			_lan_box.add_child(b)
 	if n > 0:
 		_lan_status.visible = false
+	elif OS.has_feature("web") and found.is_empty():
+		_lan_status.text = "Không kết nối được server ở địa chỉ bên dưới. Kiểm tra địa chỉ rồi bấm \"Tìm lại\"."
+	elif OS.has_feature("web"):
+		_lan_status.text = "Server chưa có phòng nào đang chờ. Bấm \"Tìm lại\" khi chủ phòng đã tạo phòng."
 	elif found.is_empty():
 		_lan_status.text = "Chưa thấy phòng nào trong Wi-Fi. Nhờ chủ phòng bấm \"Tạo phòng\" (để chọn \"Máy này làm server\") và dùng chung Wi-Fi, rồi bấm \"Tìm lại\" — hoặc nhập mã bên dưới."
 	else:
 		_lan_status.text = "Thấy server trong Wi-Fi nhưng chưa có phòng nào đang chờ. Bấm \"Tìm lại\" khi chủ phòng đã tạo phòng."
+
+
+## Bản Web: kết nối tới server ở ô địa chỉ và hỏi danh sách phòng đang chờ (thay cho tìm qua UDP).
+func _search_server() -> Array:
+	var url := _normalized(_server.text)
+	if not (Net.is_online() and Net.url == url):
+		Net.player_name = Global.player_name
+		Net.character = Global.character
+		Net.token = Global.net_token
+		if Net.connect_to(url) != OK:
+			return []
+	var t := 0.0
+	while not Net.is_online() and t < 5.0:
+		await get_tree().process_frame
+		t += get_process_delta_time()
+	if not Net.is_online():
+		return []
+	var got: Array = []
+	var done := [false]
+	var cb := func(rooms: Array):
+		got.append_array(rooms)
+		done[0] = true
+	Net.rooms_listed.connect(cb, CONNECT_ONE_SHOT)
+	Net.request_rooms()
+	t = 0.0
+	while not done[0] and t < 3.0:
+		await get_tree().process_frame
+		t += get_process_delta_time()
+	if not done[0]:
+		Net.rooms_listed.disconnect(cb)
+		return []
+	return [{"url": url, "name": url, "rooms": got}]
 
 
 # ---------------------------------------------------------------- kết nối

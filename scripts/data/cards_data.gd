@@ -239,9 +239,9 @@ static func summary(c: Dictionary) -> String:
 		"market_fire":
 			return "Mọi người mất 1 đặc sản"
 		"invest":
-			return "Bỏ %s → thu %s" % [m.call(c["cost"]), m.call(c["gain"])]
+			return "Bỏ %s » thu %s" % [m.call(c["cost"]), m.call(c["gain"])]
 		"loan":
-			return "Vay %s → trả %s" % [m.call(c["gain"]), m.call(c["cost"])]
+			return "Vay %s » trả %s" % [m.call(c["gain"]), m.call(c["cost"])]
 		"gamble":
 			return "Vốn %s · thắng %s" % [m.call(c["cost"]), m.call(c["win"])]
 		"dice_parity":

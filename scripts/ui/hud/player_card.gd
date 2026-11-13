@@ -104,7 +104,7 @@ func setup(p: Dictionary, col: Color, is_human: bool) -> void:
 	v.add_child(top)
 	_name = Label.new()
 	_name.theme_type_variation = "LightLabel"
-	_name.text = String(p["name"]) + ("  ★" if is_human else "")
+	_name.text = String(p["name"]) + ("  •" if is_human else "")
 	_name.add_theme_color_override("font_color", col.lightened(0.45))
 	_name.add_theme_font_override("font", UiTheme.bold_font())
 	_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL

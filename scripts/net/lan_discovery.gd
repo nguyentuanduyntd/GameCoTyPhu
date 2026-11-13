@@ -34,6 +34,8 @@ static func _broadcast_targets() -> Array:
 ## Tìm trong `secs` giây. Trả về [{ip, port, name, rooms: [{code, host, seats, max}]}], mỗi server một mục.
 ## Gọi bằng await: `var found := await LanDiscovery.search(get_tree(), 1.5)`
 static func search(tree: SceneTree, secs: float = 1.5) -> Array:
+	if OS.has_feature("web"):
+		return []   # trình duyệt không có UDP — bản Web hỏi danh sách phòng thẳng từ server (list_rooms)
 	var udp := PacketPeerUDP.new()
 	udp.set_broadcast_enabled(true)
 	if udp.bind(0) != OK:

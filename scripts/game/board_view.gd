@@ -583,10 +583,10 @@ func _make_festival_marker() -> Node3D:
 	var flag := _box(Vector3(0.5, 0.32, 0.03), "#e53935", true)
 	flag.position = Vector3(0.27, 1.42, 0)
 	n.add_child(flag)
-	var star := Label3D.new()
-	star.text = "★"
-	star.font_size = 48
-	star.pixel_size = 0.005
+	# ngôi sao vẽ bằng code (không dùng ký tự ★ — trình duyệt không có font dự phòng cho ký hiệu)
+	var star := Sprite3D.new()
+	star.texture = UiIcons.get_icon("star")
+	star.pixel_size = 0.0045
 	star.modulate = Color("#ffeb3b")
 	star.position = Vector3(0.27, 1.42, 0.02)
 	n.add_child(star)

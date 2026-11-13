@@ -170,6 +170,9 @@ func _handle(id: int, msg: Dictionary) -> void:
 		return
 	var room := _room_of(id)
 	match t:
+		"list_rooms":
+			# bản Web (không tìm được qua UDP) hỏi thẳng danh sách phòng đang chờ
+			send(id, {"t": "rooms", "rooms": open_rooms(), "name": server_name})
 		"create_room":
 			if room:
 				_leave(id)

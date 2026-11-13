@@ -177,7 +177,7 @@ func prompt(pend: Dictionary, seconds: float) -> void:
 	var max_steps := EconomyConfig.get_default().auction_max_raise_steps
 	for k in range(1, max_steps + 1):
 		var price := AuctionRules.price_for(a, k)
-		var txt := ("Trả %s" % BoardData.money(price)) if int(pend["leader"]) < 0 and k == 1 else ("Trả +%s → %s" % [BoardData.money(int(pend["step"]) * k), BoardData.money(price)])
+		var txt := ("Trả %s" % BoardData.money(price)) if int(pend["leader"]) < 0 and k == 1 else ("Trả +%s » %s" % [BoardData.money(int(pend["step"]) * k), BoardData.money(price)])
 		var b := _button(txt, "AccentButton")
 		if not options.has(k):
 			b.disabled = true
@@ -273,8 +273,8 @@ func _set_chip_state(pid: int, st: String, note: String = "") -> void:
 			l.add_theme_color_override("font_color", Color("#9e9e9e"))
 			chip.modulate.a = 0.75
 			chip.tooltip_text = note
-			if not l.text.begins_with("✕"):
-				l.text = "✕ " + l.text
+			if not l.text.begins_with("×"):
+				l.text = "× " + l.text
 		_:
 			sb.bg_color = col.darkened(0.45)
 			sb.border_color = col

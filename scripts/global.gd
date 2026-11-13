@@ -23,7 +23,7 @@ var cam_auto: bool = true
 var buy_fx: int = 2      # hiệu ứng mua đất: 0 tắt, 1 giảm, 2 bật
 var cinematic: int = 2   # camera điện ảnh khi đi: 0 tắt, 1 chỉ lượt của bạn, 2 mọi người chơi
 ## Chất lượng đồ hoạ: 0 Thấp, 1 Vừa, 2 Cao (mặc định Cao trên máy tính, Vừa trên điện thoại)
-var graphics_quality: int = 1 if OS.has_feature("mobile") else 2
+var graphics_quality: int = 1 if (OS.has_feature("mobile") or OS.has_feature("web")) else 2
 const QUALITY_NAMES := ["Thấp", "Vừa", "Cao"]
 
 # Online
@@ -51,6 +51,8 @@ func _ready() -> void:
 			graphics_quality = clampi(int(arg.substr(10)), 0, 2)
 		if arg.begins_with("--rounds="):   # kiểm thử: ván ngắn để xem màn kết thúc
 			max_rounds = maxi(1, int(arg.substr(9)))
+	if OS.has_feature("web"):
+		_web_defaults()
 	if net_token == "":
 		var r := RandomNumberGenerator.new()
 		r.randomize()
@@ -64,6 +66,41 @@ func _ready() -> void:
 	ThemeDB.get_default_theme().default_font = t.default_font
 	ThemeDB.get_default_theme().default_font_size = t.default_font_size
 	ThemeDB.fallback_font_size = t.default_font_size
+
+
+## Bản Web: trang được mở từ máy nào thì mặc định kết nối server của chính máy đó (ws://<máy>:8910),
+## và nhắc xoay ngang khi điện thoại đang cầm dọc.
+func _web_defaults() -> void:
+	var proto := str(JavaScriptBridge.eval("location.protocol", true))
+	var host := str(JavaScriptBridge.eval("location.hostname", true))
+	if proto == "http:" and host != "" and server_url == "ws://localhost:8910":
+		server_url = "ws://%s:%d" % [host, NetUtil.DEFAULT_PORT]
+	_rotate_hint = CanvasLayer.new()
+	_rotate_hint.layer = 120
+	var bg := ColorRect.new()
+	bg.color = Color(0.16, 0.09, 0.05, 0.96)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_rotate_hint.add_child(bg)
+	var l := Label.new()
+	l.text = "Xoay ngang điện thoại để chơi"
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.set_anchors_preset(Control.PRESET_FULL_RECT)
+	l.add_theme_font_size_override("font_size", 96)
+	l.add_theme_color_override("font_color", Color("#ffd54f"))
+	bg.add_child(l)
+	add_child(_rotate_hint)
+	get_tree().root.size_changed.connect(_update_rotate_hint)
+	_update_rotate_hint()
+
+
+var _rotate_hint: CanvasLayer
+
+
+func _update_rotate_hint() -> void:
+	if _rotate_hint:
+		var sz := DisplayServer.window_get_size()
+		_rotate_hint.visible = sz.y > sz.x
 
 
 ## Nút Back (Android): trong ván thì về sảnh (online thì rời phòng đúng cách), ở sảnh thì thoát game.

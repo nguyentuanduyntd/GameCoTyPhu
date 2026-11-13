@@ -13,6 +13,7 @@ signal move_received(entry: Dictionary)
 signal timer_started(pid: int, secs: float)
 signal notice(text: String)
 signal error_received(text: String)
+signal rooms_listed(rooms: Array)
 
 const PING_EVERY := 20.0
 
@@ -29,6 +30,8 @@ var _ping_t := 0.0
 var _pending_out: Array = []
 ## Server chạy ngay trong game này (máy tạo phòng làm server cho bạn cùng Wi-Fi). Sống suốt phiên chơi.
 var local_server: GameServer
+## Trang web của game phát kèm server trong game (iPhone mở http://<IP>:8912), nếu có bản Web đi kèm.
+var local_web: WebHost
 
 
 ## Bật server trong chính game này (nếu chưa có). Trả về false nếu cổng đã bận
@@ -36,13 +39,28 @@ var local_server: GameServer
 func start_local_server(port: int = NetUtil.DEFAULT_PORT) -> bool:
 	if local_server:
 		return true
+	if OS.has_feature("web"):
+		return false   # trình duyệt không mở được cổng server
 	var s := GameServer.new()
 	add_child(s)
 	if not s.start(port):
 		s.queue_free()
 		return false
 	local_server = s
+	var dir := WebHost.find_web_dir()
+	if dir != "":
+		var w := WebHost.new()
+		add_child(w)
+		if w.start(dir, WebHost.DEFAULT_PORT):
+			local_web = w
+		else:
+			w.queue_free()
 	return true
+
+
+## Hỏi server danh sách phòng đang chờ (kết quả qua tín hiệu rooms_listed).
+func request_rooms() -> void:
+	send({"t": "list_rooms"})
 
 
 func is_online() -> bool:
@@ -148,6 +166,8 @@ func _dispatch(msg: Dictionary) -> void:
 			move_received.emit(msg)
 		"timer":
 			timer_started.emit(int(msg["p"]), float(msg["secs"]))
+		"rooms":
+			rooms_listed.emit(msg.get("rooms", []))
 		"notice":
 			notice.emit(String(msg["text"]))
 		"error", "reject":

@@ -14,6 +14,18 @@ Lưu ý:
 - Không thấy phòng trong danh sách: bấm **Tìm lại**; hoặc nhập tay mã phòng + địa chỉ `ws://<IP máy chủ phòng>:8910` (IP hiện ngay trong thanh phòng của máy chủ phòng).
 - Máy chủ phòng là điện thoại thì đừng chuyển sang app khác trong lúc chơi (Android tạm dừng game → ván của mọi người bị treo).
 
+## 1b. iPhone (và máy bất kỳ có trình duyệt) — chơi bản Web, không cần cài
+
+iPhone không cài được file như Android (Apple bắt buộc qua App Store / máy Mac), nên iPhone chơi **bản Web** bằng Safari:
+
+1. Máy tính làm server: bấm **Tạo phòng** (để "Máy này làm server") — hoặc bấm đúp `ChayServer.bat`. Thanh phòng (hoặc cửa sổ server) hiện dòng **"iPhone / trình duyệt: mở http://<IP>:8912"**.
+2. iPhone (cùng Wi-Fi) mở **Safari**, gõ đúng địa chỉ đó, chờ tải lần đầu (khoảng 40 MB), **xoay ngang** điện thoại.
+3. Trên iPhone bấm **Nhập mã phòng** → danh sách phòng trên server hiện ra → chạm để vào. (Hoặc tự **Tạo phòng** — phòng nằm trên máy tính server.)
+
+Mẹo: trong Safari bấm nút *Chia sẻ → Thêm vào MH chính* để có biểu tượng game ngoài màn hình chính. Tường lửa Windows hỏi thì chọn **Allow** (cho cả cổng web 8912).
+
+Bản Web chỉ cần thư mục `web` nằm cạnh `TyPhuDatViet.exe` (script xuất bản tự chép vào). Đưa bản Web lên mạng (itch.io / GitHub Pages) để bạn bè ở xa mở bằng link là bước sau — khi đó chơi online qua địa chỉ `wss://` của tunnel.
+
 ## 2. Server riêng (chạy suốt, hoặc chơi qua Internet)
 
 Bản Windows đã xuất: bấm đúp **`ChayServer.bat`**. Hoặc từ project:
@@ -70,6 +82,7 @@ Luật online:
 | `scripts/net/game_server.gd` | Server WebSocket, định tuyến tin nhắn |
 | `scripts/net/server_room.gd` | Phòng: chỗ ngồi, chủ phòng, tuỳ chọn, engine chuẩn, đồng hồ, bot, hết giờ, vào lại |
 | `scripts/net/net_client.gd` | Kết nối phía game (autoload `Net`), ping giữ kết nối, bật server trong game (`start_local_server`) |
+| `scripts/net/web_host.gd` | Máy chủ web tí hon phát bản Web (cổng 8912) cho iPhone / trình duyệt cùng Wi-Fi |
 | `scripts/net/lan_discovery.gd` | Tìm server/phòng trong cùng Wi-Fi: máy tìm gửi UDP quảng bá cổng 8911, server trả lời kèm danh sách phòng đang chờ |
 | `scripts/ui/online_connect.gd` | Hộp nhập địa chỉ server / mã phòng |
 | `scripts/ui/lobby.gd` | Thanh phòng chờ, hàng nhân vật 3D theo người trong phòng |

@@ -138,9 +138,9 @@ Ván ngắn để xem màn kết thúc: thêm `--rounds=1`. Cho popup quyết đ
 | F5 | Lần lượt các phản ứng: lucky, jolt, cheer, slump, sigh, sad |
 | F6 | Đổi kích thước cửa sổ 1280×720 ↔ 1920×1080 |
 
-## Xuất bản (Windows / Android)
+## Xuất bản (Windows / Android / Web)
 
-`powershell -ExecutionPolicy Bypass -File tools/build.ps1` → `build/windows/TyPhuDatViet.exe` (một file, gửi bạn bè chạy luôn, kèm `ChayServer.bat` để bật server) và `build/android/TyPhuDatViet.apk`. Hướng dẫn đầy đủ: [docs/PUBLISH.md](docs/PUBLISH.md).
+`powershell -ExecutionPolicy Bypass -File tools/build.ps1` → `build/windows/TyPhuDatViet.exe` (một file, gửi bạn bè chạy luôn, kèm `ChayServer.bat` để bật server), `build/android/TyPhuDatViet.apk` và `build/web/` (bản Web). **iPhone** chơi bản Web bằng Safari: máy tính làm server thì iPhone cùng Wi-Fi mở `http://<IP máy tính>:8912`. Hướng dẫn đầy đủ: [docs/PUBLISH.md](docs/PUBLISH.md), [docs/ONLINE.md](docs/ONLINE.md).
 
 ## Chơi online với bạn bè
 

@@ -239,7 +239,7 @@ func _rebuild_row() -> void:
 			_player_char = ch
 			_spot.position = Vector3(x, 5.5, 0.4)
 			var you := Label3D.new()
-			you.text = "▼ BẠN ▼"
+			you.text = "• BẠN •"
 			you.font_size = 44
 			you.pixel_size = 0.005
 			you.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -288,7 +288,7 @@ func _build_ui() -> void:
 	pick.alignment = BoxContainer.ALIGNMENT_CENTER
 	pick.add_theme_constant_override("separation", 12)
 	v.add_child(pick)
-	var prev := _button("  ◀  ", func(): _cycle_character(-1))
+	var prev := _button("   <   ", func(): _cycle_character(-1))
 	prev.add_theme_font_size_override("font_size", 22)
 	pick.add_child(prev)
 	var mid := VBoxContainer.new()
@@ -302,7 +302,7 @@ func _build_ui() -> void:
 	_char_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_char_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mid.add_child(_char_desc)
-	var nxt := _button("  ▶  ", func(): _cycle_character(1))
+	var nxt := _button("   >   ", func(): _cycle_character(1))
 	nxt.add_theme_font_size_override("font_size", 22)
 	pick.add_child(nxt)
 
@@ -514,8 +514,12 @@ func _on_room(room: Dictionary) -> void:
 		_room_info.text = "%d/6 chỗ · %d người thật · %s" % [seats.size(), humans, "bạn là chủ phòng" if _is_host() else "gửi mã cho bạn bè để cùng vào"]
 		if Net.local_server:
 			var ips := LanDiscovery.local_ipv4()
-			_room_info.text += "
-Máy này đang làm server — bạn cùng Wi-Fi bấm \"Nhập mã phòng\" là thấy phòng" + ((" (IP máy này: %s)" % ", ".join(ips.slice(0, 3))) if not ips.is_empty() else "")
+			_room_info.text += "\nMáy này đang làm server — bạn cùng Wi-Fi bấm \"Nhập mã phòng\" là thấy phòng" + ((" (IP máy này: %s)" % ", ".join(ips.slice(0, 3))) if not ips.is_empty() else "")
+			if Net.local_web and not ips.is_empty():
+				var urls: Array = []
+				for ip in ips.slice(0, 2):
+					urls.append("http://%s:%d" % [ip, WebHost.DEFAULT_PORT])
+				_room_info.text += "\niPhone / trình duyệt: mở " + " hoặc ".join(urls)
 		var host := _is_host()
 		_room_host_row.visible = host
 		_room_start.visible = host

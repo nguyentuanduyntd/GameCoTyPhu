@@ -3,6 +3,7 @@
 #   powershell -ExecutionPolicy Bypass -File tools\build.ps1                 # cả hai
 #   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -WindowsOnly
 #   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -AndroidOnly
+#   powershell -ExecutionPolicy Bypass -File tools\build.ps1 -WebOnly      # bản Web (iPhone / trình duyệt)
 #   thêm -Godot "<đường dẫn Godot ..._console.exe>" nếu Godot ở chỗ khác
 #
 # Cài thẳng lên điện thoại (không phải gửi file): thêm -Install
@@ -17,6 +18,7 @@ param(
 	[string]$Godot = "D:\Dowload\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe",
 	[switch]$WindowsOnly,
 	[switch]$AndroidOnly,
+	[switch]$WebOnly,
 	[switch]$Install,
 	[string]$Phone = ""
 )
@@ -33,15 +35,33 @@ function Export-Preset([string]$preset, [string]$out) {
 	Write-Host "   xong: $out ($mb MB)"
 }
 
-if (-not $AndroidOnly) {
+$doWin = -not ($AndroidOnly -or $WebOnly)
+$doAndroid = -not ($WindowsOnly -or $WebOnly)
+$doWeb = -not ($WindowsOnly -or $AndroidOnly)
+
+if ($doWeb) {
+	# Bản Web (chơi bằng trình duyệt, kể cả Safari trên iPhone): build\web\index.html + các tệp đi kèm
+	if (Test-Path "build\web") { Remove-Item -Recurse -Force "build\web" }
+	New-Item -ItemType Directory -Force "build\web" | Out-Null
+	Export-Preset "Web" "build/web/index.html"
+}
+
+if ($doWin) {
 	New-Item -ItemType Directory -Force "build\windows" | Out-Null
 	Export-Preset "Windows Desktop" "build/windows/TyPhuDatViet.exe"
+	# Kèm bản Web để server phát luôn trang web (iPhone mở http://<IP máy>:8912 là chơi)
+	if (Test-Path "build\web\index.html") {
+		if (Test-Path "build\windows\web") { Remove-Item -Recurse -Force "build\windows\web" }
+		Copy-Item "build\web" "build\windows\web" -Recurse
+		Write-Host "   đã chép bản Web vào build\windows\web"
+	}
 	# Tệp bật server ngay từ bản đã xuất (không cần cài Godot)
 	$bat = @"
 @echo off
 chcp 65001 >nul
 title Server Ty Phu Dat Viet
 echo Dang bat server Ty Phu Dat Viet (cong 8910). Dong cua so nay de tat server.
+echo iPhone / may khac cung Wi-Fi: mo trinh duyet vao dia chi http://IP-may-nay:8912 (xem dong ben duoi)
 echo Choi qua Internet: mo them cua so chay  cloudflared tunnel --url http://localhost:8910
 "%~dp0TyPhuDatViet.console.exe" --headless -- --server %*
 pause
@@ -50,7 +70,7 @@ pause
 	Copy-Item "docs\ONLINE.md" "build\windows\HuongDanOnline.md" -Force
 }
 
-if (-not $WindowsOnly) {
+if ($doAndroid) {
 	New-Item -ItemType Directory -Force "build\android" | Out-Null
 	if (-not $env:JAVA_HOME) {
 		$jbr = "C:\Program Files\Android\Android Studio\jbr"
