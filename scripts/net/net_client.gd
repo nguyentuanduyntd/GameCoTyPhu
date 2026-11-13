@@ -16,6 +16,20 @@ signal error_received(text: String)
 signal rooms_listed(rooms: Array)
 
 const PING_EVERY := 20.0
+## Đợi máy kia xác nhận đóng tối đa bao lâu; im lặng (không cả trả lời ping) bao lâu thì coi là đứt mạng.
+const CLOSE_WAIT := 3.0
+const SILENCE_LIMIT := 50.0
+var _state_t := 0.0
+var _rx_t := 0.0
+
+
+func _lost() -> void:
+	if _ws:
+		_ws.close()
+	_ws = null
+	_state = WebSocketPeer.STATE_CLOSED
+	_welcomed = false
+	disconnected.emit()
 
 var url := ""
 var player_name := "Bạn"
@@ -77,6 +91,8 @@ func connect_to(p_url: String) -> Error:
 	_ws.outbound_buffer_size = 1 << 16
 	_ws.max_queued_packets = 4096
 	_welcomed = false
+	_state_t = 0.0
+	_rx_t = 0.0
 	var err := _ws.connect_to_url(url)
 	if err != OK:
 		_ws = null
@@ -113,12 +129,20 @@ func leave_room() -> void:
 	room = {}
 
 
-func send_action(a: Dictionary) -> void:
-	send({"t": "action", "a": a})
+## Gửi nước đi. `for_pid` >= 0: đi hộ bot đó (chỉ khi server "trạm chuyển tiếp" giao bot_turn cho máy này).
+func send_action(a: Dictionary, for_pid: int = -1) -> void:
+	var msg := {"t": "action", "a": a}
+	if for_pid >= 0:
+		msg["for"] = for_pid
+	send(msg)
 
 
-func send_ready(n: int) -> void:
-	send({"t": "ready", "n": n})
+## Báo đã diễn xong tới nước thứ n. `info`: lượt đang chờ ai (turn), loại bước (ptype), mã trạng thái (h),
+## hết ván (over) — server "trạm chuyển tiếp" không chạy luật chơi nên dựa vào báo cáo này; server Godot bỏ qua.
+func send_ready(n: int, info: Dictionary = {}) -> void:
+	var msg := {"t": "ready", "n": n}
+	msg.merge(info)
+	send(msg)
 
 
 func _process(delta: float) -> void:
@@ -131,16 +155,26 @@ func _process(delta: float) -> void:
 		if st == WebSocketPeer.STATE_OPEN:
 			_ws.send_text(NetUtil.encode({"t": "hello", "v": NetUtil.PROTOCOL, "name": player_name, "character": character, "token": token}))
 		elif st == WebSocketPeer.STATE_CLOSED:
-			_ws = null
-			_welcomed = false
-			disconnected.emit()
+			_lost()
 			return
+		_state_t = 0.0
+	_state_t += delta
+	# đang đóng mà máy kia không đáp (hoặc mạng đứt): coi như đã mất kết nối sau vài giây
+	if st == WebSocketPeer.STATE_CLOSING and _state_t > CLOSE_WAIT:
+		_lost()
+		return
 	if st != WebSocketPeer.STATE_OPEN:
 		return
 	while _ws and _ws.get_available_packet_count() > 0:
+		_rx_t = 0.0
 		var msg := NetUtil.decode(_ws.get_packet().get_string_from_utf8())
 		if not msg.is_empty():
 			_dispatch(msg)
+	# im lặng quá lâu (không cả trả lời ping) → mạng đã đứt mà chưa báo: đóng để tự kết nối lại
+	_rx_t += delta
+	if _welcomed and _rx_t > SILENCE_LIMIT:
+		_lost()
+		return
 	_ping_t += delta
 	if _ping_t >= PING_EVERY and _welcomed:
 		_ping_t = 0.0

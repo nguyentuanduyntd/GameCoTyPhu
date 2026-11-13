@@ -703,7 +703,10 @@ func _after_queue_inner() -> void:
 	if online:
 		if _drain_net():
 			return
-		Net.send_ready(_applied)
+		var rp := engine.pending
+		Net.send_ready(_applied, {"turn": int(rp.get("p", -1)), "ptype": String(rp.get("type", "")),
+			"h": engine.state_hash(), "over": engine.game_over})
+		_try_bot_job()
 	if engine.game_over:
 		return
 	var pend := engine.pending
@@ -1180,10 +1183,7 @@ func _online_begin(events: Array) -> void:
 		return
 	# Vào lại giữa ván: chạy nhanh mọi nước đã đi (không diễn), rồi dựng lại bàn cờ theo trạng thái
 	for en in log:
-		if en["k"] == "forfeit":
-			engine.forfeit(en["p"])
-		else:
-			engine.act(en["p"], en["a"])
+		_apply_entry_silent(en)
 	_applied = log.size()
 	var h := String(Net.start_info.get("hash", ""))
 	if h != "" and engine.state_hash() != h:
@@ -1191,6 +1191,18 @@ func _online_begin(events: Array) -> void:
 	_sync_visuals()
 	hud.show_banner("Đã vào lại ván — chơi tiếp nào!", 2.0)
 	_after_queue()
+
+
+## Áp một nước trong bản ghi mà không diễn (dùng khi tải lại ván): act / forfeit / timeout.
+func _apply_entry_silent(en: Dictionary) -> void:
+	match String(en.get("k", "act")):
+		"forfeit":
+			engine.forfeit(en["p"])
+		"timeout":
+			if not engine.pending.is_empty():
+				engine.act(en["p"], GameEngine.timeout_action(engine.pending))
+		_:
+			engine.act(en["p"], en.get("a", {}))
 
 
 ## Dựng lại toàn bộ hình ảnh theo trạng thái engine (sau khi tải lại ván).
@@ -1269,7 +1281,15 @@ func _apply_net(m: Dictionary) -> void:
 		hud.hide_roll()
 		if hud.building_picker.visible:
 			hud.building_picker.close()
-	var evs: Array = engine.forfeit(m["p"]) if m["k"] == "forfeit" else engine.act(m["p"], a)
+	var evs: Array
+	match String(m["k"]):
+		"forfeit":
+			evs = engine.forfeit(m["p"])
+		"timeout":
+			# server trạm chuyển tiếp báo hết giờ: mọi máy tự áp cùng một phương án an toàn
+			evs = engine.act(m["p"], GameEngine.timeout_action(engine.pending)) if not engine.pending.is_empty() else []
+		_:
+			evs = engine.act(m["p"], a)
 	_applied = int(m["n"])
 	# kiểm thử: --netdrop=N giả lập rớt mạng sau nước thứ N (một lần)
 	for arg in OS.get_cmdline_user_args():
@@ -1277,7 +1297,8 @@ func _apply_net(m: Dictionary) -> void:
 			Global.set_meta("netdropped", true)
 			Net._ws.close()
 	_busy = false
-	if engine.state_hash() != String(m.get("h", "")):
+	# server Godot gửi kèm mã trạng thái để so; trạm chuyển tiếp không có (so qua báo cáo ready)
+	if m.has("h") and engine.state_hash() != String(m["h"]):
 		_resync("Lệch trạng thái với server — đang đồng bộ lại...")
 		return
 	if evs.is_empty():
@@ -1297,6 +1318,30 @@ func _on_net_message(m: Dictionary) -> void:
 			# server từ chối (thường do vừa hết giờ): nếu vẫn tới lượt mình thì hiện lại lựa chọn
 			if not _busy and not _stepping and _inbox.is_empty() and not engine.pending.is_empty() and int(engine.pending["p"]) == human_id:
 				_after_queue()
+		"bot_turn":
+			# trạm chuyển tiếp giao cho máy này đi hộ bot
+			if int(m.get("driver", -1)) == human_id:
+				_bot_job = {"p": int(m["p"]), "n": int(m["n"])}
+				if not _busy and not _stepping:
+					_try_bot_job()
+		"resync":
+			_resync("Lệch trạng thái với các máy khác — đang đồng bộ lại...")
+
+
+## Đi hộ bot (server trạm chuyển tiếp) khi máy này đã diễn tới đúng nước được giao.
+var _bot_job: Dictionary = {}
+
+
+func _try_bot_job() -> void:
+	if _bot_job.is_empty() or int(_bot_job["n"]) != _applied:
+		return
+	var pend := engine.pending
+	var pid: int = _bot_job["p"]
+	_bot_job = {}
+	if pend.is_empty() or int(pend["p"]) != pid or not engine.players[pid]["is_bot"]:
+		return
+	var a: Dictionary = AuctionRules.ai_decide(engine, pend) if String(pend["type"]) == "auction_bid" else BotAI.decide(engine, pend)
+	Net.send_action(a, pid)
 
 
 func _resync(text: String) -> void:

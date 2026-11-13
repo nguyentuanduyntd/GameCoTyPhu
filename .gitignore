@@ -10,3 +10,7 @@
 # OS
 Thumbs.db
 .DS_Store
+
+# Cloudflare Workers
+server_cf/node_modules/
+server_cf/.wrangler/

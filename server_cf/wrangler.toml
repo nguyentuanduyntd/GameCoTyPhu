@@ -1,0 +1,15 @@
+# Server online của Tỷ Phú Đất Việt trên Cloudflare Workers (gói miễn phí).
+# Triển khai:  cd server_cf  →  npx wrangler deploy     (lần đầu: npx wrangler login)
+# Thử trên máy: npx wrangler dev   → ws://localhost:8787
+name = "typhudatviet"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+# Durable Object dùng SQLite: bắt buộc với gói miễn phí (trạm chỉ giữ dữ liệu trong bộ nhớ)
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Lobby"]
