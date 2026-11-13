@@ -28,6 +28,20 @@ Chỉ xuất một nền tảng: thêm `-WindowsOnly`, `-AndroidOnly` hoặc `-W
 
 Gửi bạn bè bản Windows: nén thư mục `build\windows` thành .zip. Windows có thể hiện cảnh báo SmartScreen vì file chưa được ký số (ký số tốn phí) → bấm *More info → Run anyway*.
 
+## Đăng bản Web lên GitHub Pages (link cố định)
+
+```bash
+powershell -ExecutionPolicy Bypass -File tools\build.ps1 -WebOnly
+```
+
+```bash
+powershell -ExecutionPolicy Bypass -File tools\publish_web.ps1
+```
+
+Script đẩy `build\web` lên nhánh **`gh-pages`** của repo (luôn chỉ 1 commit, thay mới mỗi lần nên repo không phình ra) và ghi link vào `tools\web_url.txt`. Link: `https://<chủ repo>.github.io/<tên repo>/`. Lần đầu, nếu sau vài phút link chưa chạy: vào repo trên GitHub → *Settings → Pages* → *Source: Deploy from a branch*, *Branch: gh-pages / (root)* → *Save*. GitHub Pages miễn phí với repo công khai, tệp tối đa 100 MB (Cloudflare Pages không dùng được vì giới hạn 25 MB/tệp, trong khi `index.wasm` ~38 MB).
+
+Sau đó chạy lại `tools\build.ps1` để `web_url.txt` được chép vào bản Windows: `ChiaSeInternet.bat` sẽ dùng link GitHub Pages cho trang web và chỉ mở đường hầm cho server.
+
 ## Cài APK lên điện thoại
 
 - Gửi file `.apk` qua Zalo/Drive/cáp, mở trên điện thoại, cho phép *Cài ứng dụng không rõ nguồn gốc* khi được hỏi.

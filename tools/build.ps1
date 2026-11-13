@@ -72,6 +72,8 @@ pause
 	Copy-Item "tools\chia_se_internet.ps1" "build\windows\ChiaSeInternet.ps1" -Force
 	Set-Content -Path "build\windows\ChiaSeInternet.bat" -Encoding ASCII -Value "@echo off`r`nchcp 65001 >nul`r`ntitle Chia se Ty Phu Dat Viet qua Internet`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0ChiaSeInternet.ps1`"`r`npause"
 	if (Test-Path "build\tools\cloudflared.exe") { Copy-Item "build\tools\cloudflared.exe" "build\windows\cloudflared.exe" -Force }
+	# Link bản Web cố định (GitHub Pages, ghi bởi tools\publish_web.ps1) → ChiaSeInternet chỉ cần mở đường hầm cho server
+	if (Test-Path "tools\web_url.txt") { Copy-Item "tools\web_url.txt" "build\windows\web_url.txt" -Force }
 }
 
 if ($doAndroid) {
