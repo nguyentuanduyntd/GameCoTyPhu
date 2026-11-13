@@ -20,6 +20,10 @@ var _rooms := {}        # code -> ServerRoom
 var _next_peer := 1
 var _rng := RandomNumberGenerator.new()
 var _running := false
+var _lan := PacketPeerUDP.new()   # trả lời máy tìm server trong cùng Wi-Fi (LanDiscovery)
+var _lan_ok := false
+## Tên hiển thị khi người khác tìm thấy server này trong Wi-Fi.
+var server_name := ""
 
 
 func _ready() -> void:
@@ -34,6 +38,17 @@ func start(p_port: int = NetUtil.DEFAULT_PORT) -> bool:
 		return false
 	_running = true
 	_log("Server Tỷ Phú Đất Việt đang chạy ở cổng %d (giao thức v%d)." % [port, NetUtil.PROTOCOL])
+	_lan_ok = _lan.bind(LanDiscovery.PORT) == OK
+	if server_name == "":
+		server_name = OS.get_environment("COMPUTERNAME") if OS.get_environment("COMPUTERNAME") != "" else OS.get_model_name()
+	var ips := LanDiscovery.local_ipv4()
+	if not ips.is_empty():
+		var addrs: Array = []
+		for ip in ips:
+			addrs.append("ws://%s:%d" % [ip, port])
+		_log("Bạn cùng Wi-Fi: bấm \"Nhập mã phòng\" là thấy phòng; hoặc nhập một trong các địa chỉ: %s" % ", ".join(addrs))
+	if not _lan_ok:
+		_log("(Không mở được cổng tìm trong Wi-Fi %d — có thể đã có server khác chạy trên máy này.)" % LanDiscovery.PORT)
 	return true
 
 
@@ -42,11 +57,25 @@ func stop() -> void:
 		(_peers[id]["ws"] as WebSocketPeer).close()
 	_peers.clear()
 	_tcp.stop()
+	_lan.close()
+	_lan_ok = false
 	_running = false
 
 
 func room_count() -> int:
 	return _rooms.size()
+
+
+## Các phòng còn chờ người (chưa vào ván, chưa đầy) — gửi cho máy tìm trong Wi-Fi.
+func open_rooms() -> Array:
+	var out: Array = []
+	for c in _rooms:
+		var r: ServerRoom = _rooms[c]
+		if r.started or r.seats.size() >= ServerRoom.MAX_SEATS or r.seats.is_empty():
+			continue
+		var host: String = r.seats[clampi(r.host_seat, 0, r.seats.size() - 1)]["name"]
+		out.append({"code": c, "host": host, "seats": r.seats.size(), "max": ServerRoom.MAX_SEATS})
+	return out
 
 
 func _log(text: String) -> void:
@@ -58,6 +87,8 @@ func _log(text: String) -> void:
 func _process(delta: float) -> void:
 	if not _running:
 		return
+	if _lan_ok and _lan.get_available_packet_count() > 0:
+		LanDiscovery.answer(_lan, {"port": port, "name": server_name, "rooms": open_rooms()})
 	while _tcp.is_connection_available():
 		var conn := _tcp.take_connection()
 		var ws := WebSocketPeer.new()

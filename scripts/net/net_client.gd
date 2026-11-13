@@ -27,6 +27,22 @@ var _state := WebSocketPeer.STATE_CLOSED
 var _welcomed := false
 var _ping_t := 0.0
 var _pending_out: Array = []
+## Server chạy ngay trong game này (máy tạo phòng làm server cho bạn cùng Wi-Fi). Sống suốt phiên chơi.
+var local_server: GameServer
+
+
+## Bật server trong chính game này (nếu chưa có). Trả về false nếu cổng đã bận
+## (thường là đã có server khác chạy trên máy, ví dụ ChayServer.bat) — khi đó cứ kết nối tới nó.
+func start_local_server(port: int = NetUtil.DEFAULT_PORT) -> bool:
+	if local_server:
+		return true
+	var s := GameServer.new()
+	add_child(s)
+	if not s.start(port):
+		s.queue_free()
+		return false
+	local_server = s
+	return true
 
 
 func is_online() -> bool:

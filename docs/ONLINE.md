@@ -2,24 +2,32 @@
 
 Chơi online hoàn toàn miễn phí: **server chính là project Godot này** chạy ở chế độ không màn hình, dùng chung luật chơi với bản offline. Không thuê máy chủ, không dịch vụ trả phí.
 
-## 1. Bật server
+## 1. Chơi cùng Wi-Fi (máy tính + điện thoại) — không cần bật gì thêm
 
-Trên máy của bạn (máy sẽ làm server), mở terminal tại thư mục project:
+1. Máy chủ phòng (máy tính hoặc điện thoại) bấm **Tạo phòng** → để nguyên ô **"Máy này làm server"** → **Tạo phòng**. Game tự bật server ngay bên trong.
+2. Các máy khác (cùng mạng Wi-Fi) bấm **Nhập mã phòng** → danh sách **"Phòng trong cùng Wi-Fi"** tự hiện → **chạm vào phòng** là vào. Không cần gõ địa chỉ hay mã.
+3. Chủ phòng thêm máy nếu muốn, rồi bấm **BẮT ĐẦU**.
+
+Lưu ý:
+- **Tường lửa Windows**: lần đầu máy tính làm server, Windows hỏi *"Allow access?"* cho Tỷ Phú Đất Việt → chọn **Allow** (tích *Private networks*). Nếu lỡ bấm Cancel thì điện thoại sẽ không vào được: mở *Windows Security → Firewall & network protection → Allow an app through firewall* và tích cho game (hoặc cho Godot nếu chạy từ editor).
+- Mạng Wi-Fi công cộng (quán cà phê, công ty) thường chặn các máy nói chuyện với nhau → dùng Wi-Fi nhà hoặc điểm phát Wi-Fi từ điện thoại.
+- Không thấy phòng trong danh sách: bấm **Tìm lại**; hoặc nhập tay mã phòng + địa chỉ `ws://<IP máy chủ phòng>:8910` (IP hiện ngay trong thanh phòng của máy chủ phòng).
+- Máy chủ phòng là điện thoại thì đừng chuyển sang app khác trong lúc chơi (Android tạm dừng game → ván của mọi người bị treo).
+
+## 2. Server riêng (chạy suốt, hoặc chơi qua Internet)
+
+Bản Windows đã xuất: bấm đúp **`ChayServer.bat`**. Hoặc từ project:
 
 ```bash
 godot --headless --path . -- --server
 ```
 
-Mặc định server nghe cổng **8910**; muốn đổi cổng thì thêm `--port=9000`. Nhấn `Ctrl+C` để tắt. Server ghi nhật ký: ai tạo/vào phòng, ván bắt đầu, ai rớt mạng/vào lại.
-
-> `godot` ở đây là đường dẫn tới file Godot của bạn, ví dụ `D:\Dowload\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`.
-
-## 2. Cho người khác kết nối
+Mặc định cổng **8910** (thêm `--port=9000` để đổi). Nhấn `Ctrl+C` (hoặc đóng cửa sổ) để tắt. Server ghi nhật ký ai tạo/vào phòng, ván bắt đầu, ai rớt mạng/vào lại, và in sẵn các địa chỉ cho máy cùng Wi-Fi. Máy cùng Wi-Fi vẫn **tự thấy phòng** trên server này; khi tạo phòng trên chính máy chạy server, cứ để "Máy này làm server" (game tự dùng server đang chạy).
 
 | Tình huống | Địa chỉ server nhập trong game |
 |---|---|
-| Thử trên cùng máy (mở 2 cửa sổ game) | `ws://localhost:8910` |
-| Cùng mạng Wi-Fi / LAN | `ws://<IP máy server>:8910` (xem IP bằng `ipconfig`, ví dụ `ws://192.168.1.5:8910`) |
+| Cùng máy | `ws://localhost:8910` |
+| Cùng mạng Wi-Fi / LAN | thường không cần (tự tìm); nhập tay: `ws://<IP máy server>:8910` |
 | Qua Internet | dùng tunnel miễn phí bên dưới |
 
 ### Qua Internet bằng Cloudflare Tunnel (miễn phí, không cần tài khoản)
@@ -38,8 +46,8 @@ Mặc định server nghe cổng **8910**; muốn đổi cổng thì thêm `--po
 
 ## 3. Trong game
 
-1. Ở sảnh bấm **Tạo phòng** → nhập địa chỉ server → được một **mã phòng 6 ký tự** (bấm *Sao chép mã* rồi gửi bạn bè).
-2. Bạn bè bấm **Nhập mã phòng** → nhập mã + địa chỉ server.
+1. Qua Internet: chủ phòng bấm **Tạo phòng** → **bỏ chọn** "Máy này làm server" → nhập địa chỉ `wss://...` → được **mã phòng 6 ký tự** (bấm *Sao chép mã* rồi gửi bạn bè).
+2. Bạn bè bấm **Nhập mã phòng** → nhập mã + địa chỉ server → **Vào bằng mã**.
 3. Ai cũng đổi nhân vật được bằng ◀ ▶ (không trùng nhau). Chủ phòng thêm/bớt máy, chọn số vòng, độ khó của máy, giờ suy nghĩ (15/30/60 giây), rồi bấm **BẮT ĐẦU**. Phòng có 2–6 chỗ.
 
 Luật online:
@@ -61,7 +69,8 @@ Luật online:
 | `scripts/net/net_util.gd` | Phiên bản giao thức, mã phòng, đóng/giải gói JSON (đưa số nguyên về `int`) |
 | `scripts/net/game_server.gd` | Server WebSocket, định tuyến tin nhắn |
 | `scripts/net/server_room.gd` | Phòng: chỗ ngồi, chủ phòng, tuỳ chọn, engine chuẩn, đồng hồ, bot, hết giờ, vào lại |
-| `scripts/net/net_client.gd` | Kết nối phía game (autoload `Net`), ping giữ kết nối |
+| `scripts/net/net_client.gd` | Kết nối phía game (autoload `Net`), ping giữ kết nối, bật server trong game (`start_local_server`) |
+| `scripts/net/lan_discovery.gd` | Tìm server/phòng trong cùng Wi-Fi: máy tìm gửi UDP quảng bá cổng 8911, server trả lời kèm danh sách phòng đang chờ |
 | `scripts/ui/online_connect.gd` | Hộp nhập địa chỉ server / mã phòng |
 | `scripts/ui/lobby.gd` | Thanh phòng chờ, hàng nhân vật 3D theo người trong phòng |
 | `scripts/game/game.gd` | Chế độ online của ván chơi (`_online_begin`, `_apply_net`, `_drain_net`...) |
@@ -78,6 +87,20 @@ godot --headless --path . --script res://tests/net_determinism.gd -- 150
 
 ```bash
 godot --headless --path . --script res://tests/net_server_test.gd
+```
+
+```bash
+godot --headless --path . --script res://tests/net_discovery_test.gd
+```
+
+Máy chủ phòng tự làm server + máy kia tự tìm phòng trong Wi-Fi rồi vào (không cần server riêng):
+
+```bash
+godot --path . -- --netauto=hostlocal:2 --netbot --until-over
+```
+
+```bash
+godot --path . -- --netauto=joinlan --netbot --until-over
 ```
 
 Chạy thật hai máy tự chơi (một terminal server, hai terminal game):

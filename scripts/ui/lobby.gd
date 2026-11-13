@@ -63,6 +63,8 @@ func _ready() -> void:
 			_room_demo()
 		if a.begins_with("--netauto="):
 			_net_auto(a.substr(10))
+		if a == "--joindemo":
+			_open_connect("join")   # kiểm thử hình ảnh hộp vào phòng (kèm --menushot)
 	for a in args:
 		if a.begins_with("--menushot="):
 			_shot(a.substr(11))
@@ -510,6 +512,10 @@ func _on_room(room: Dictionary) -> void:
 			if not st["is_bot"]:
 				humans += 1
 		_room_info.text = "%d/6 chỗ · %d người thật · %s" % [seats.size(), humans, "bạn là chủ phòng" if _is_host() else "gửi mã cho bạn bè để cùng vào"]
+		if Net.local_server:
+			var ips := LanDiscovery.local_ipv4()
+			_room_info.text += "
+Máy này đang làm server — bạn cùng Wi-Fi bấm \"Nhập mã phòng\" là thấy phòng" + ((" (IP máy này: %s)" % ", ".join(ips.slice(0, 3))) if not ips.is_empty() else "")
 		var host := _is_host()
 		_room_host_row.visible = host
 		_room_start.visible = host
@@ -584,6 +590,19 @@ func _net_auto(spec: String) -> void:
 	Net.player_name = "Tự động " + ("Chủ" if spec.begins_with("host") else str(randi() % 90 + 10))
 	Net.character = Global.character
 	Net.token = "auto-%d" % randi()
+	if spec.begins_with("hostlocal"):
+		# máy chủ phòng tự làm server (như khi chọn "Máy này làm server")
+		Net.start_local_server()
+		Global.server_url = "ws://127.0.0.1:%d" % NetUtil.DEFAULT_PORT
+	if spec == "joinlan":
+		# tìm phòng trong Wi-Fi rồi vào phòng đầu tiên thấy được
+		while true:
+			var found: Array = await LanDiscovery.search(get_tree(), 1.5)
+			for srv in found:
+				if not (srv["rooms"] as Array).is_empty():
+					Net.connect_to("ws://%s:%d" % [srv["ip"], srv["port"]])
+					Net.join_room(String(srv["rooms"][0]["code"]))
+					return
 	Net.connect_to(Global.server_url)
 	if spec.begins_with("host"):
 		var need := int(spec.get_slice(":", 1)) if spec.contains(":") else 2
@@ -625,7 +644,11 @@ func _on_start() -> void:
 
 
 func _shot(path: String) -> void:
-	await get_tree().create_timer(1.5).timeout
+	var delay := 1.5
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--shotdelay="):
+			delay = float(a.substr(12))
+	await get_tree().create_timer(delay).timeout
 	get_viewport().get_texture().get_image().save_png(path)
 	get_tree().quit()
 
