@@ -28,7 +28,7 @@ const QUALITY_NAMES := ["Thấp", "Vừa", "Cao"]
 
 # Online
 ## Địa chỉ server (ws://máy:cổng hoặc wss://... của tunnel). Lưu lại cho lần sau.
-var server_url: String = "ws://localhost:8910"
+var server_url: String = NetUtil.PUBLIC_SERVER
 ## Mã định danh máy này (để vào lại đúng chỗ khi rớt mạng). Tạo một lần, lưu lại.
 var net_token: String = ""
 ## Ván sắp vào là ván online (game.gd đọc); thông tin bắt đầu ván nằm ở Net.start_info.
@@ -86,7 +86,7 @@ func _web_defaults() -> void:
 	elif proto == "http:" and host != "":
 		server_url = "ws://%s:%d" % [host, NetUtil.DEFAULT_PORT]
 	else:
-		server_url = ""
+		server_url = NetUtil.PUBLIC_SERVER   # trang công khai (GitHub Pages): dùng server công cộng 24/7
 	_rotate_hint = CanvasLayer.new()
 	_rotate_hint.layer = 120
 	var bg := ColorRect.new()
@@ -147,6 +147,8 @@ func load_settings() -> void:
 	buy_fx = cf.get_value("graphics", "buy_fx", buy_fx)
 	graphics_quality = cf.get_value("graphics", "quality", graphics_quality)
 	server_url = cf.get_value("online", "server", server_url)
+	if server_url == "ws://localhost:8910" or server_url == "":
+		server_url = NetUtil.PUBLIC_SERVER   # mặc định cũ (máy này) → server công cộng
 	net_token = cf.get_value("online", "token", net_token)
 
 

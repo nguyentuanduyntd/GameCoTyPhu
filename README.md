@@ -144,7 +144,7 @@ Ván ngắn để xem màn kết thúc: thêm `--rounds=1`. Cho popup quyết đ
 
 ## Chơi online với bạn bè
 
-Bật server ngay trên máy bạn (miễn phí): `godot --headless --path . -- --server`, rồi ở sảnh bấm **Tạo phòng** để lấy mã 6 ký tự gửi bạn bè; họ bấm **Nhập mã phòng**. Chơi qua Internet bằng Cloudflare Tunnel miễn phí. Hướng dẫn đầy đủ: [docs/ONLINE.md](docs/ONLINE.md).
+Có sẵn **server công cộng chạy 24/7** (Cloudflare Workers, miễn phí): mở game hoặc trang web https://nguyentuanduyntd.github.io/GameCoTyPhu/, một người bấm **Tạo phòng**, những người khác bấm **Nhập mã phòng** là thấy phòng. Bật server ngay trên máy bạn (miễn phí): `godot --headless --path . -- --server`, rồi ở sảnh bấm **Tạo phòng** để lấy mã 6 ký tự gửi bạn bè; họ bấm **Nhập mã phòng**. Chơi qua Internet bằng Cloudflare Tunnel miễn phí. Hướng dẫn đầy đủ: [docs/ONLINE.md](docs/ONLINE.md).
 
 ## Tiến độ
 

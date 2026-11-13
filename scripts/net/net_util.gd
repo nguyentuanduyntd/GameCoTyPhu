@@ -5,6 +5,8 @@ extends RefCounted
 ## Phiên bản giao thức: server và client phải trùng nhau mới chơi được với nhau.
 const PROTOCOL := 1
 const DEFAULT_PORT := 8910
+## Server công cộng chạy 24/7 trên Cloudflare Workers (server_cf/) — mặc định để tạo / vào phòng qua Internet.
+const PUBLIC_SERVER := "wss://typhudatviet.typhudatviet-server.workers.dev"
 ## Ký tự dùng cho mã phòng: bỏ các ký tự dễ nhầm (0/O, 1/I/L, 5/S, 8/B).
 const CODE_CHARS := "ACDEFGHJKMNPQRTUVWXY234679"
 const CODE_LEN := 6

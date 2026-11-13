@@ -2,6 +2,28 @@
 
 Chơi online hoàn toàn miễn phí: **server chính là project Godot này** chạy ở chế độ không màn hình, dùng chung luật chơi với bản offline. Không thuê máy chủ, không dịch vụ trả phí.
 
+## 0. Cách đơn giản nhất: server công cộng chạy 24/7 (khuyên dùng)
+
+Game có sẵn một **server công cộng** chạy suốt ngày đêm trên Cloudflare (miễn phí): `wss://typhudatviet.typhudatviet-server.workers.dev`. Không cần bật máy làm server, không cần gửi địa chỉ.
+
+1. Mọi người mở game: bản cài (.exe / .apk) hoặc trang web **https://nguyentuanduyntd.github.io/GameCoTyPhu/** (iPhone: Safari).
+2. Một người bấm **Tạo phòng** → **Tạo phòng** → được mã phòng 6 ký tự.
+3. Những người khác bấm **Nhập mã phòng** → phòng đang chờ tự hiện trong danh sách → chạm để vào (hoặc gõ mã).
+4. Chủ phòng thêm máy nếu muốn rồi bấm **BẮT ĐẦU**.
+
+Cách hoạt động (khác server Godot ở các mục dưới): server công cộng là "trạm chuyển tiếp" — giữ phòng, mã phòng, thứ tự nước đi, đồng hồ, cho vào lại khi rớt mạng; còn luật chơi do chính các máy chơi chạy (giống hệt nhau nên luôn khớp), **bot do máy chủ phòng đi hộ** (chủ phòng rớt mạng thì máy người khác đi hộ). Mã nguồn: `server_cf/src/index.js`.
+
+Giới hạn gói miễn phí của Cloudflare (khoảng 100.000 lượt gửi/ngày) dư cho chơi bạn bè. Phòng đang chờ hiện công khai trong danh sách "Nhập mã phòng" của mọi người.
+
+**Cập nhật server công cộng** (khi đổi giao thức):
+
+```bash
+cd server_cf
+npx wrangler deploy
+```
+
+Thử trên máy trước khi đưa lên: `npx wrangler dev` → server ở `ws://localhost:8787`.
+
 ## 1. Chơi cùng Wi-Fi (máy tính + điện thoại) — không cần bật gì thêm
 
 1. Máy chủ phòng (máy tính hoặc điện thoại) bấm **Tạo phòng** → để nguyên ô **"Máy này làm server"** → **Tạo phòng**. Game tự bật server ngay bên trong.
@@ -91,7 +113,8 @@ Luật online:
 | File | Vai trò |
 |---|---|
 | `scripts/net/net_util.gd` | Phiên bản giao thức, mã phòng, đóng/giải gói JSON (đưa số nguyên về `int`) |
-| `scripts/net/game_server.gd` | Server WebSocket, định tuyến tin nhắn |
+| `scripts/net/game_server.gd` | Server WebSocket (Godot), định tuyến tin nhắn — dùng khi "Máy này làm server" / ChayServer.bat |
+| `server_cf/src/index.js` | Server công cộng trên Cloudflare Workers + Durable Object (trạm chuyển tiếp: bot_turn, move k=timeout, resync) |
 | `scripts/net/server_room.gd` | Phòng: chỗ ngồi, chủ phòng, tuỳ chọn, engine chuẩn, đồng hồ, bot, hết giờ, vào lại |
 | `scripts/net/net_client.gd` | Kết nối phía game (autoload `Net`), ping giữ kết nối, bật server trong game (`start_local_server`) |
 | `scripts/net/web_host.gd` | Máy chủ web tí hon phát bản Web (cổng 8912) cho iPhone / trình duyệt cùng Wi-Fi |

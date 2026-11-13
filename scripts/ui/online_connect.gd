@@ -50,27 +50,24 @@ func _ready() -> void:
 	v.add_child(title)
 
 	if mode == "create":
+		# Mặc định: phòng trên server công cộng 24/7 (Cloudflare) — bạn bè ở đâu cũng vào được bằng mã phòng.
+		# Bản cài có thêm lựa chọn "Máy này làm server" cho chơi cùng Wi-Fi không cần Internet.
+		var on_public := Global.server_url == NetUtil.PUBLIC_SERVER
+		v.add_child(_caption(("Phòng được tạo trên server công cộng (chạy 24/7) — bạn bè ở đâu cũng vào được bằng mã phòng, kể cả iPhone qua trang web." if on_public
+			else "Phòng được tạo trên server ở địa chỉ bên dưới."), true))
 		_host_here = CheckBox.new()
-		_host_here.text = "Máy này làm server — bạn cùng Wi-Fi vào được ngay"
-		_host_here.button_pressed = true
+		_host_here.text = "Máy này làm server (chỉ bạn cùng Wi-Fi vào được, không cần Internet)"
+		_host_here.button_pressed = false
 		_host_here.toggled.connect(func(on): _server_row.visible = not on)
 		v.add_child(_host_here)
 		if OS.has_feature("web"):
-			_host_here.button_pressed = false   # trình duyệt không làm server được
-			_host_here.visible = false
-		if OS.has_feature("web"):
-			if Global.server_url == "":
-				v.add_child(_caption(_no_server_hint(), true))
-			else:
-				v.add_child(_caption("Phòng được tạo trên server ở địa chỉ bên dưới (lấy từ link bạn mở).", true))
-		else:
-			v.add_child(_caption("Chơi qua Internet: bỏ chọn và nhập địa chỉ server (wss://...trycloudflare.com).", true))
+			_host_here.visible = false   # trình duyệt không làm server được
 	else:
 		var head := HBoxContainer.new()
 		head.add_theme_constant_override("separation", 8)
 		v.add_child(head)
 		var lt := Label.new()
-		lt.text = "Phòng trên server" if OS.has_feature("web") else "Phòng trong cùng Wi-Fi"
+		lt.text = "Phòng đang chờ"
 		lt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		head.add_child(lt)
 		var again := Button.new()
@@ -120,7 +117,7 @@ func _ready() -> void:
 	_server.placeholder_text = "Dán link hoặc địa chỉ wss://… chủ phòng gửi" if OS.has_feature("web") else "ws://192.168.1.5:8910 hoặc wss://....trycloudflare.com"
 	_server.text_submitted.connect(func(_t): _go_pressed())
 	srow.add_child(_server)
-	srow.visible = mode == "join" or OS.has_feature("web")
+	srow.visible = true   # tạo phòng: ẩn khi chọn "Máy này làm server"
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -174,18 +171,14 @@ func _search_lan() -> void:
 	for c in _lan_box.get_children():
 		if c != _lan_status:
 			c.queue_free()
-	_lan_status.text = "Đang tìm phòng trong Wi-Fi..."
+	_lan_status.text = "Đang tìm phòng..."
 	_lan_status.visible = true
-	var found: Array
-	if OS.has_feature("web"):
-		if _server.text.strip_edges() == "":
-			_lan_status.text = _no_server_hint()
-			_searching = false
-			return
-		_lan_status.text = "Đang hỏi server danh sách phòng..."
-		found = await _search_server()
-	else:
-		found = await LanDiscovery.search(get_tree(), 1.6)
+	# phòng trên server ở ô địa chỉ (mặc định server công cộng) + phòng trong cùng Wi-Fi (bản cài)
+	var found: Array = []
+	if _server.text.strip_edges() != "":
+		found.append_array(await _search_server())
+	if not OS.has_feature("web") and is_inside_tree():
+		found.append_array(await LanDiscovery.search(get_tree(), 1.6))
 	_searching = false
 	if not is_inside_tree():
 		return
@@ -195,7 +188,7 @@ func _search_lan() -> void:
 			n += 1
 			var b := Button.new()
 			b.text = "Phòng của %s   ·   %d/%d người   ·   mã %s" % [r["host"], r["seats"], r["max"], r["code"]]
-			b.tooltip_text = "Server: %s (%s)" % [srv["name"], srv["ip"]]
+			b.tooltip_text = "Server: %s (%s)" % [srv["name"], srv.get("ip", srv.get("url", ""))]
 			b.custom_minimum_size = Vector2(0, 52)
 			b.theme_type_variation = "AccentButton"
 			var url: String = srv["url"] if srv.has("url") else "ws://%s:%d" % [srv["ip"], int(srv["port"])]
@@ -206,14 +199,10 @@ func _search_lan() -> void:
 			_lan_box.add_child(b)
 	if n > 0:
 		_lan_status.visible = false
-	elif OS.has_feature("web") and found.is_empty():
-		_lan_status.text = "Không kết nối được server ở địa chỉ bên dưới. Kiểm tra địa chỉ rồi bấm \"Tìm lại\"."
-	elif OS.has_feature("web"):
-		_lan_status.text = "Server chưa có phòng nào đang chờ. Bấm \"Tìm lại\" khi chủ phòng đã tạo phòng."
 	elif found.is_empty():
-		_lan_status.text = "Chưa thấy phòng nào trong Wi-Fi. Nhờ chủ phòng bấm \"Tạo phòng\" (để chọn \"Máy này làm server\") và dùng chung Wi-Fi, rồi bấm \"Tìm lại\" — hoặc nhập mã bên dưới."
+		_lan_status.text = "Không kết nối được server. Kiểm tra mạng Internet, rồi bấm \"Tìm lại\" — hoặc nhập mã phòng bên dưới."
 	else:
-		_lan_status.text = "Thấy server trong Wi-Fi nhưng chưa có phòng nào đang chờ. Bấm \"Tìm lại\" khi chủ phòng đã tạo phòng."
+		_lan_status.text = "Chưa có phòng nào đang chờ. Bấm \"Tìm lại\" khi bạn bè đã tạo phòng — hoặc nhập mã phòng bên dưới."
 
 
 ## Bản Web: kết nối tới server ở ô địa chỉ và hỏi danh sách phòng đang chờ (thay cho tìm qua UDP).
@@ -247,7 +236,7 @@ func _search_server() -> Array:
 	if not done[0]:
 		Net.rooms_listed.disconnect(cb)
 		return []
-	return [{"url": url, "name": url, "rooms": got}]
+	return [{"url": url, "name": "Server công cộng" if url == NetUtil.PUBLIC_SERVER else url, "rooms": got}]
 
 
 # ---------------------------------------------------------------- kết nối
