@@ -155,4 +155,4 @@ Bật server ngay trên máy bạn (miễn phí): `godot --headless --path . -- 
 - [x] Thẻ Khí Vận / Cơ Hội, đấu giá, 4 loại công trình, camera điện ảnh, đánh bóng giao diện và chuyển động
 - [~] M4 — Online: **tạo phòng bằng mã ✓** (server tự chạy, rớt mạng vào lại, hết giờ bỏ lượt); ghép trận ngẫu nhiên — đợt 2
 - [ ] M5 — Tài khoản, leo hạng
-- [~] M6 — Xuất bản Windows (.exe) + Android (.apk) ✓, điều khiển cảm ứng ✓; còn: thử trên điện thoại thật, tối ưu hiệu năng máy yếu
+- [~] M6 — Xuất bản Windows (.exe) + Android (.apk) ✓, điều khiển cảm ứng ✓, chạy trên điện thoại thật ✓; còn: tối ưu hiệu năng máy yếu, giảm dung lượng

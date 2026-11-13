@@ -41,6 +41,7 @@ Gửi bạn bè bản Windows: nén thư mục `build\windows` thành .zip. Wind
 ## Đã kiểm tra
 
 - Bản Windows: mở sảnh, chơi với máy, bật server bằng chính file .exe, hai bản .exe chơi online trọn ván (mã trạng thái khớp).
+- Bản Android (Vulkan) **chạy được trên điện thoại thật** (cài APK gửi qua mạng).
 - Bản Android trên máy ảo Pixel 9 Pro (Android 16): màn hình ngang toàn màn hình, sảnh và ván chơi hiển thị đủ, chạm để tung xúc xắc / chọn hoạt động.
 - Lưu ý máy ảo Android: Vulkan của máy ảo không đưa được hình lên màn hình (màn đen, log "Couldn't present to Vulkan queue") — lỗi của máy ảo, không phải của game. Để thử trên máy ảo, xuất tạm một bản dùng OpenGL (thêm `renderer/rendering_method.mobile="gl_compatibility"` vào `project.godot`, xuất xong bỏ đi). Trên điện thoại thật nên thử bản chính trước.
 - Game bật **tự chuyển sang OpenGL** khi máy không khởi tạo được Vulkan (`rendering_device/fallback_to_opengl3`), nên máy đời cũ vẫn chạy được. Nếu một máy nào đó vẫn bị màn đen, có thể cho bản Android luôn dùng OpenGL bằng dòng ở trên (đổi lại: hình kém hơn một chút).
