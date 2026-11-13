@@ -8,18 +8,35 @@ const PORT := 8911
 const ASK := "TPDV?1"
 
 
-## Địa chỉ IPv4 nội bộ của máy này (192.168.x.x, 10.x.x.x, 172.16–31.x.x).
+## Tên card mạng ảo (máy ảo, WSL...) — điện thoại không vào được qua các địa chỉ này.
+const VIRTUAL_IF := ["vmware", "virtualbox", "vbox", "vethernet", "hyper-v", "wsl", "docker", "loopback", "tailscale", "zerotier"]
+
+
+## Địa chỉ IPv4 nội bộ của máy này (192.168.x.x, 10.x.x.x, 172.16–31.x.x), bỏ card mạng ảo;
+## card Wi-Fi xếp trước để địa chỉ hiện đầu tiên thường là địa chỉ đúng cho điện thoại.
 static func local_ipv4() -> Array:
-	var out: Array = []
-	for a in IP.get_local_addresses():
-		var s := String(a)
-		if s.count(".") != 3 or s.begins_with("127.") or s.begins_with("169.254."):
+	var wifi: Array = []
+	var other: Array = []
+	for iface in IP.get_local_interfaces():
+		var name := (String(iface.get("friendly", "")) + " " + String(iface.get("name", ""))).to_lower()
+		var skip := false
+		for v in VIRTUAL_IF:
+			if name.contains(v):
+				skip = true
+		if skip:
 			continue
-		var p := s.split(".")
-		var b := int(p[1])
-		if s.begins_with("192.168.") or s.begins_with("10.") or (p[0] == "172" and b >= 16 and b <= 31):
-			out.append(s)
-	return out
+		for a in iface.get("addresses", []):
+			var s := String(a)
+			if s.count(".") != 3 or s.begins_with("127.") or s.begins_with("169.254."):
+				continue
+			var p := s.split(".")
+			var b := int(p[1])
+			if s.begins_with("192.168.") or s.begins_with("10.") or (p[0] == "172" and b >= 16 and b <= 31):
+				if name.contains("wi-fi") or name.contains("wifi") or name.contains("wlan") or name.contains("wireless"):
+					wifi.append(s)
+				else:
+					other.append(s)
+	return wifi + other
 
 
 ## Địa chỉ quảng bá để hỏi: 255.255.255.255 và x.y.z.255 của từng mạng nội bộ (một số router chặn loại đầu).
